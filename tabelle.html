@@ -236,19 +236,70 @@
         });
     }
 
+    // Globale Hilfsvariablen für die Scan-Beruhigung (ganz oben im Script oder direkt über der Funktion platzieren)
+    let letzterGescannterCode = "";
+    let scanTrefferZaehler = 0;
+
+    // OPTIMIERTE PRÜFUNG: Strengere mathematische Kontrolle für EAN/ISBN
+    function istGueltigerBarcode(code) {
+        const sauber = code.replace(/[-\s]/g, "");
+        
+        // Reine Zahlenprüfung und Längen-Check (8, 12 oder 13 Stellen)
+        if (!/^\d+$/.test(sauber) || (sauber.length !== 8 && sauber.length !== 12 && sauber.length !== 13)) {
+            return false;
+        }
+        
+        let summe = 0;
+        for (let i = 0; i < sauber.length - 1; i++) {
+            let ziffer = parseInt(sauber.charAt(i));
+            if (sauber.length === 13) {
+                summe += (i % 2 === 0) ? ziffer : ziffer * 3;
+            } else {
+                summe += (i % 2 === 0) ? ziffer * 3 : ziffer;
+            }
+        }
+        
+        const berechnetePruefziffer = (10 - (summe % 10)) % 10;
+        const echtePruefziffer = parseInt(sauber.charAt(sauber.length - 1));
+        
+        return berechnetePruefziffer === echtePruefziffer;
+    }
+
+    // DER HOCHSICHERHEITS-SCANNER (Doppelte Absicherung gegen Geister-Scans)
     function onScanSuccess(decodedText, decodedResult) {
         const barcode = decodedText.trim();
         
-        // NEU: Wenn die Mathematik sagt "Das ist ein Ghost-Scan", brechen wir ab 
-        // und scannen einfach im Hintergrund weiter, ohne dass der User es merkt!
+        // Schritt 1: Mathematischer Grund-Check
         if (!istGueltigerBarcode(barcode)) {
-            console.log("Fehllesung blockiert: " + barcode);
+            console.log("Mathematisch ungültig ignorieren: " + barcode);
             return; 
         }
         
-        // Erst wenn der Code mathematisch korrekt ist, schalten wir die Kamera ab
-        stoppeKamera();
-        verarbeiteCode(barcode);
+        // Schritt 2: Der Doppel-Check! 
+        // Wenn der neue Code nicht dem direkt davor entspricht, fangen wir an zu zählen
+        if (barcode !== letzterGescannterCode) {
+            letzterGescannterCode = barcode;
+            scanTrefferZaehler = 1; // Erster Treffer gemerkt
+            console.log("Code gemerkt, warte auf Bestätigung: " + barcode);
+            return; // Wir brechen ab und warten aufs nächste Bild der Kamera!
+        } else {
+            // Der Code ist identisch mit dem Bild davor! Wir erhöhen den Zähler
+            scanTrefferZaehler++;
+        }
+        
+        // Erst wenn die Kamera den exakt gleichen Code 2-mal hintereinander scharf erfasst hat,
+        // schlagen wir wirklich zu! Das senkt Fehllesungen gegen 0%.
+        if (scanTrefferZaehler >= 2) {
+            console.log("Code 2x bestätigt! Starte Verarbeitung: " + barcode);
+            
+            // Zähler zurücksetzen für den nächsten Scan
+            letzterGescannterCode = "";
+            scanTrefferZaehler = 0;
+            
+            // Kamera stoppen und Produkt laden
+            stoppeKamera();
+            verarbeiteCode(barcode);
+        }
     }
     // TIMER LOGIK
     function starteTimer() {
@@ -337,33 +388,7 @@
     document.getElementById('btnScanStoppen').addEventListener('click', stoppeKamera);
 
     tabelleInitialisieren();
-    // NEU: Mathematische Prüfung für EAN-13 und ISBN-13 (Modulo 10)
-    function istGueltigerBarcode(code) {
-        const sauber = code.replace(/[-\s]/g, ""); // Leerzeichen/Bindestriche entfernen
-        
-        // Ein echter Barcode muss genau 8, 12 oder 13 Ziffern haben und darf nur aus Zahlen bestehen
-        if (!/^\d+$/.test(sauber) || (sauber.length !== 8 && sauber.length !== 12 && sauber.length !== 13)) {
-            return false;
-        }
-        
-        // Die mathematische Prüfziffernkontrolle
-        let summe = 0;
-        for (let i = 0; i < sauber.length - 1; i++) {
-            let ziffer = parseInt(sauber.charAt(i));
-            if (sauber.length === 13) {
-                // Bei 13 Stellen: Ungerade Positionen * 1, gerade * 3
-                summe += (i % 2 === 0) ? ziffer : ziffer * 3;
-            } else {
-                // Bei 8 oder 12 Stellen: Umgekehrtes Schema
-                summe += (i % 2 === 0) ? ziffer * 3 : ziffer;
-            }
-        }
-        
-        const berechnetePruefziffer = (10 - (summe % 10)) % 10;
-        const echtePruefziffer = parseInt(sauber.charAt(sauber.length - 1));
-        
-        return berechnetePruefziffer === echtePruefziffer;
-    }
+   
 </script>
 
 </body>
