@@ -263,16 +263,28 @@
         }, 1000);
     }
 
-    function starteKamera() {
+   function starteKamera() {
         document.getElementById('scanner-container').style.display = 'block';
-        html5QrcodeScanner = new Html5Qrcode("reader");
+        
+        // NEU: Wir zwingen den Scanner, nur nach echten Supermarkt- & Buch-Barcodes zu suchen!
+        // Das schließt Fehllesungen durch QR-Codes oder Rauschen komplett aus.
+        html5QrcodeScanner = new Html5Qrcode("reader", { 
+            formatsToSupport: [ 
+                Html5QrcodeSupportedFormats.EAN_13, 
+                Html5QrcodeSupportedFormats.EAN_8,
+                Html5QrcodeSupportedFormats.ISBN_13
+            ] 
+        });
         
         html5QrcodeScanner.start(
             { facingMode: "environment" }, 
-            { fps: 10, qrbox: { width: 250, height: 150 } }, 
+            { 
+                fps: 15,                  // Etwas schnelleres Scannen (15 statt 10 Bilder pro Sekunde)
+                qrbox: { width: 280, height: 120 } // Ein flacheres, breiteres Suchfenster - perfekt für Strichcodes!
+            }, 
             onScanSuccess
         ).then(() => {
-            starteTimer(); // Erst wenn Kamera läuft, startet die Uhr
+            starteTimer();
         })
         .catch(err => {
             alert("Kamera-Fehler: " + err);
