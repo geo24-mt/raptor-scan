@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mein Listen-Dashboard</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 500px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin: 0 auto; }
+        .btn { display: block; width: 100%; padding: 15px; margin-bottom: 10px; text-align: center; border-radius: 4px; font-weight: bold; text-decoration: none; box-sizing: border-box; }
+        .btn-neu { background-color: #2ecc71; color: white; margin-bottom: 25px; }
+        
+        /* Zeile für die Liste mit Löschbutton */
+        .listen-zeile { display: flex; margin-bottom: 10px; gap: 10px; }
+        .btn-liste { background-color: #34495e; color: white; border-left: 5px solid #3498db; flex-grow: 1; text-align: left; padding: 15px; border-radius: 4px; text-decoration: none; font-weight: bold; }
+        .btn-loeschen { background-color: #e74c3c; color: white; border: none; padding: 0 15px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 18px; }
+        .btn-loeschen:hover { background-color: #c0392b; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Meine Sammlungen 🗂️</h2>
+    
+    <a href="index.html" id="linkNeueListe" class="btn btn-neu">＋ Neue Liste erstellen</a>
+    
+    <h3>Deine vorhandenen Listen:</h3>
+    <div id="listenUebersicht"></div>
+</div>
+
+<script>
+    // 1. Funktion: Alle Listen aus dem Dauerspeicher laden
+    function ladeListenAusSpeicher() {
+        const gespeicherteDaten = localStorage.getItem('meineAppListen');
+        if (gespeicherteDaten) {
+            return JSON.parse(gespeicherteDaten);
+        }
+        return []; // Wenn noch nichts gespeichert ist, starten wir leer
+    }
+
+    // 2. Funktion: Den aktuellen Zustand im Dauerspeicher sichern
+    function speichereListenInLocalStorage(listenArray) {
+        localStorage.setItem('meineAppListen', JSON.stringify(listenArray));
+    }
+
+    // Haupt-Ablauf beim Laden der Seite:
+    let alleListen = ladeListenAusSpeicher();
+
+    // Prüfen, ob GERADE EBEN eine neue Liste aus dem Baukasten (index.html) kam
+    const urlParameter = new URLSearchParams(window.location.search);
+    const neuerName = urlParameter.get('addName');
+    const neueAttrs = urlParameter.get('addAttrs');
+
+    if (neuerName && neueAttrs) {
+        const gibtsSchon = alleListen.some(l => l.name === neuerName);
+        if (!gibtsSchon) {
+            // Neue Liste zum Array hinzufügen
+            alleListen.push({ name: neuerName, attrs: neueAttrs });
+            // Sofort dauerhaft abspeichern!
+            speichereListenInLocalStorage(alleListen);
+        }
+        // Die hässlichen Parameter aus der URL entfernen, damit die Seite sauber ist
+        window.history.replaceState({}, document.title, "dashboard.html");
+    }
+
+    // Die Listen als Buttons auf den Bildschirm zeichnen
+    const uebersichtDiv = document.getElementById('listenUebersicht');
+    uebersichtDiv.innerHTML = "";
+
+    if (alleListen.length === 0) {
+        uebersichtDiv.innerHTML = "<p style='color:#7f8c8d; font-style:italic; text-align:center;'>Keine Listen vorhanden.</p>";
+    }
+
+    alleListen.forEach(function(liste, index) {
+        const zeile = document.createElement('div');
+        zeile.className = 'listen-zeile';
+
+        const link = document.createElement('a');
+        link.className = 'btn btn-liste';
+        
+        // HIER SCHICKEN WIR JETZT BEIDES MIT: Den Index UND Namen + Spalten für den Notfall!
+        link.href = `tabelle.html?listeIndex=${index}&name=${encodeURIComponent(liste.name)}&attrs=${encodeURIComponent(liste.attrs)}`;
+        link.innerText = liste.name;
+
+        const loeschBtn = document.createElement('button');
+        loeschBtn.className = 'btn-loeschen';
+        loeschBtn.innerText = '✕';
+        loeschBtn.onclick = function() {
+            if(confirm(`Möchtest du die Liste "${liste.name}" wirklich löschen?`)) {
+                alleListen.splice(index, 1);
+                speichereListenInLocalStorage(alleListen);
+                window.location.reload();
+            }
+        };
+
+        zeile.appendChild(link);
+        zeile.appendChild(loeschBtn);
+        uebersichtDiv.appendChild(zeile);
+    });
+</script>
+
+</body>
+</html>

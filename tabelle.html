@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meine Liste</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 900px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin: 0 auto; }
+        .header-box { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        h2 { margin: 0; }
+        .btn { padding: 10px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: white; text-decoration: none; }
+        .btn-back { background-color: #7f8c8d; font-size: 14px; display: inline-block; }
+        .btn-scan { background-color: #e67e22; }
+        
+        /* SCANNER & MANUELL STYLE */
+        #scanner-container { max-width: 500px; margin: 20px auto; display: none; background: #333; padding: 15px; border-radius: 8px; color: white; }
+        #reader { width: 100%; background: white; }
+        .btn-stop { background-color: #e74c3c; width: 100%; margin-top: 10px; padding: 12px; }
+        #timer-anzeige { text-align: center; font-weight: bold; margin-bottom: 8px; color: #f1c40f; }
+        
+        .manuell-box { background: #ecf0f1; padding: 15px; border-radius: 6px; margin: 20px 0; display: flex; gap: 10px; align-items: center; }
+        .input-text { padding: 10px; border: 1px solid #bdc3c7; border-radius: 4px; flex-grow: 1; font-size: 16px; }
+        .btn-speichern { background-color: #2ecc71; }
+
+        /* TABELLEN STYLE */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #34495e; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .leere-meldung { text-align: center; color: #7f8c8d; padding: 20px; font-style: italic; }
+        
+        /* Macht Tabellenzellen als Eingabefeld erkennbar */
+        .edtierbar { cursor: pointer; background-color: #fffde7; }
+        .edtierbar:hover { background-color: #fff9c4; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+        <a href="index.html" class="btn" style="background-color: #7f8c8d; font-size: 14px; flex-grow: 1; text-align: center; text-decoration: none;">📋 Zum Baukasten</a>
+        <a href="dashboard.html" class="btn" style="background-color: #2980b9; font-size: 14px; flex-grow: 1; text-align: center; text-decoration: none;">🗂️ Zum Dashboard</a>
+    </div>
+    
+    <div class="header-box" style="margin-top: 15px;">
+        <h2 id="ansichtListenName">Lade Liste...</h2>
+        <button class="btn btn-scan" id="btnScanStarten">📷 Code scannen</button>
+    </div>
+    
+    <div id="scanner-container">
+        <div id="timer-anzeige">Verbleibende Zeit: 45s</div>
+        <div id="reader"></div>
+        <button class="btn btn-stop" id="btnScanStoppen">Kamera ausschalten</button>
+    </div>
+
+    <div class="manuell-box">
+        <strong>Manuelle Eingabe:</strong>
+        <input type="text" id="inputBarcodeManuell" class="input-text" placeholder="Barcode-Nummer hier eintippen...">
+        <button class="btn btn-speichern" id="btnManuellAbschicken">Hinzufügen</button>
+    </div>
+    
+    <table id="meineDynamischeTabelle">
+        <thead>
+            <tr id="tabellenKopfZeile"></tr>
+        </thead>
+        <tbody id="tabellenInhalt"></tbody>
+    </table>
+    
+    <div id="leereMeldung" class="leere-meldung">
+        Diese Liste ist noch leer. Scanne einen Code oder gib ihn manuell ein!
+    </div>
+</div>
+
+<script>
+    let html5QrcodeScanner = null;
+    let anzahlSpalten = 0;
+    let listenIndex = null;
+    let alleListen = [];
+    
+    // Timer-Variablen
+    let countdownTimer = null;
+    let verbleibendeSekunden = 45;
+
+    function tabelleInitialisieren() {
+        const urlParameter = new URLSearchParams(window.location.search);
+        listenIndex = urlParameter.get('listeIndex');
+        const nameAusUrl = urlParameter.get('name');
+        const attributeAusUrl = urlParameter.get('attrs');
+        
+        let listenStruktur = null;
+        
+        const gespeicherteDaten = localStorage.getItem('meineAppListen');
+        if (gespeicherteDaten) {
+            alleListen = JSON.parse(gespeicherteDaten);
+            if (listenIndex !== null && alleListen[listenIndex]) {
+                listenStruktur = alleListen[listenIndex];
+            }
+        } 
+        
+        if (!listenStruktur && nameAusUrl && attributeAusUrl) {
+            listenStruktur = { name: nameAusUrl, attrs: attributeAusUrl, produkte: [] };
+            if (!Array.isArray(alleListen)) { alleListen = []; }
+            if (listenIndex === null) { listenIndex = 0; }
+            alleListen[listenIndex] = listenStruktur;
+        }
+        
+        if (!listenStruktur) {
+            alert("Hinweis: Bitte öffne die Liste direkt über das Dashboard!");
+            window.location.href = 'dashboard.html';
+            return;
+        }
+        
+        document.getElementById('ansichtListenName').innerText = listenStruktur.name;
+        
+        const zurückBtn = document.querySelector('.btn-back');
+        if (zurückBtn) {
+            if (nameAusUrl) { zurückBtn.innerText = "← Zurück zum Baukasten"; zurückBtn.href = "index.html"; }
+            else { zurückBtn.innerText = "← Zurück zur Übersicht"; zurückBtn.href = "dashboard.html"; }
+        }
+        
+        const kopfZeile = document.getElementById('tabellenKopfZeile');
+        let kopfHTML = '<th>Barcode</th>';
+        
+        const attributeArray = Array.isArray(listenStruktur.attrs) ? listenStruktur.attrs : listenStruktur.attrs.split(',');
+        anzahlSpalten = attributeArray.length;
+
+        attributeArray.forEach(function(attributName) {
+            kopfHTML += `<th>${attributName}</th>`;
+        });
+        kopfZeile.innerHTML = kopfHTML;
+
+        if (listenStruktur.produkte && listenStruktur.produkte.length > 0) {
+            document.getElementById('leereMeldung').style.display = 'none';
+            const tabellenInhalt = document.getElementById('tabellenInhalt');
+            tabellenInhalt.innerHTML = "";
+            
+            listenStruktur.produkte.forEach((p, pIndex) => {
+                const zeile = document.createElement('tr');
+                let zeilenHTML = `<td><strong>${p.barcode}</strong></td>`;
+                
+                attributeArray.forEach(attributName => {
+                    // Jede Zelle bekommt die Klasse "edtierbar" und eine Klickfunktion spendiert!
+                    zeilenHTML += `<td class="edtierbar" onclick="zelleManuellEditieren(${pIndex}, '${attributName}')">${p[attributName] || '-'}</td>`;
+                });
+                
+                zeile.innerHTML = zeilenHTML;
+                tabellenInhalt.appendChild(zeile);
+            });
+        }
+    }
+
+    function speichereProduktInListe(barcode, produktDaten) {
+        if (!alleListen[listenIndex].produkte) {
+            alleListen[listenIndex].produkte = [];
+        }
+        produktDaten.barcode = barcode;
+        alleListen[listenIndex].produkte.push(produktDaten);
+        localStorage.setItem('meineAppListen', JSON.stringify(alleListen));
+        tabelleInitialisieren(); // Tabelle neu zeichnen, um Klick-Events zu aktivieren
+    }
+
+    // NEU: Funktion um Zellen direkt durch Anklicken manuell zu ändern!
+    function zelleManuellEditieren(pIndex, attributName) {
+        const alterWert = alleListen[listenIndex].produkte[pIndex][attributName] || "";
+        const neuerWert = prompt(`Wert für "${attributName}" ändern:`, alterWert);
+        
+        if (neuerWert !== null) {
+            alleListen[listenIndex].produkte[pIndex][attributName] = neuerWert;
+            localStorage.setItem('meineAppListen', JSON.stringify(alleListen));
+            tabelleInitialisieren(); // Anzeige aktualisieren
+        }
+    }
+
+    // VERARBEITUNG DER NUMMER (Egal ob Kamera oder Tastatur)
+    function verarbeiteCode(barcode) {
+        const saubererBarcode = barcode.trim();
+        if (!saubererBarcode) return;
+
+        document.getElementById('leereMeldung').style.display = 'none';
+        
+        // Prüfen, ob wir die Attribute als Text oder Array haben
+        const aktuelleAttribute = Array.isArray(alleListen[listenIndex].attrs) 
+            ? alleListen[listenIndex].attrs 
+            : alleListen[listenIndex].attrs.split(',');
+
+        console.log("Suche in der Medien-Datenbank...");
+        
+        fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${saubererBarcode}&format=json&jscmd=data`)
+        .then(response => response.json())
+        .then(bookData => {
+            const bucheintrag = bookData[`ISBN:${saubererBarcode}`];
+            let temporaereDaten = {};
+            
+            if (bucheintrag) {
+                aktuelleAttribute.forEach(function(attributName) {
+                    if (attributName === "Titel" || attributName === "Name" || attributName === "Produkt") temporaereDaten[attributName] = bucheintrag.title || "Ohne Titel";
+                    else if (attributName === "Autor" || attributName === "Marke") temporaereDaten[attributName] = bucheintrag.authors ? bucheintrag.authors.map(a => a.name).join(', ') : "Unbekannt";
+                    else if (attributName === "Erscheinungsjahr") temporaereDaten[attributName] = bucheintrag.publish_date || "Unbekannt";
+                    else if (attributName === "Verlag") temporaereDaten[attributName] = bucheintrag.publishers ? bucheintrag.publishers.map(p => p.name).join(', ') : "Unbekannt";
+                    else if (attributName === "Seitenanzahl" || attributName === "Laufzeit" || attributName === "Inhalt") temporaereDaten[attributName] = bucheintrag.number_of_pages ? bucheintrag.number_of_pages + " Seiten" : "-";
+                    else temporaereDaten[attributName] = "-";
+                });
+                speichereProduktInListe(saubererBarcode, temporaereDaten);
+                alert(`Medium erkannt:\n${bucheintrag.title}`);
+            } else {
+                // Weiche auf Lebensmittel aus
+                fetch(`https://world.openfoodfacts.org/api/v2/product/${saubererBarcode}.json`)
+                .then(response => response.json())
+                .then(foodData => {
+                    if (foodData.status === 1 && foodData.product) {
+                        const p = foodData.product;
+                        aktuelleAttribute.forEach(function(attributName) {
+                            if (attributName === "Titel" || attributName === "Name" || attributName === "Produkt") temporaereDaten[attributName] = p.product_name || "Unbekanntes Produkt";
+                            else if (attributName === "Marke" || attributName === "Verlag" || attributName === "Autor") temporaereDaten[attributName] = p.brands || "Unbekannte Marke";
+                            else if (attributName === "Seitenanzahl" || attributName === "Laufzeit" || attributName === "Inhalt") temporaereDaten[attributName] = p.quantity || "Keine Mengenangabe";
+                            else temporaereDaten[attributName] = "-";
+                        });
+                        speichereProduktInListe(saubererBarcode, temporaereDaten);
+                        alert(`Lebensmittel erkannt:\n${p.product_name || 'Produkt'}`);
+                    } else {
+                        // Gar nix gefunden -> Leere Zellen zum Selberbefüllen erstellen!
+                        alert(`Code ${saubererBarcode} unbekannt. Du kannst die Felder jetzt manuell durch Anklicken befüllen!`);
+                        aktuelleAttribute.forEach(function(attributName) {
+                            temporaereDaten[attributName] = "Klicke zum Eintragen";
+                        });
+                        speichereProduktInListe(saubererBarcode, temporaereDaten);
+                    }
+                });
+            }
+        })
+        .catch(err => {
+            console.error("Fehler:", err);
+        });
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        stoppeKamera();
+        verarbeiteCode(decodedText);
+    }
+
+    // TIMER LOGIK
+    function starteTimer() {
+        verbleibendeSekunden = 45;
+        document.getElementById('timer-anzeige').innerText = `Verbleibende Zeit: ${verbleibendeSekunden}s`;
+        
+        countdownTimer = setInterval(function() {
+            verbleibendeSekunden--;
+            document.getElementById('timer-anzeige').innerText = `Verbleibende Zeit: ${verbleibendeSekunden}s`;
+            
+            if (verbleibendeSekunden <= 0) {
+                clearInterval(countdownTimer);
+                stoppeKamera();
+                alert("Kamera-Timeout: Code wurde nicht automatisch erkannt. Bitte gib die Nummer manuell ein!");
+                
+                // Fokus automatisch auf das manuelle Eingabefeld setzen
+                const inputFeld = document.getElementById('inputBarcodeManuell');
+                inputFeld.focus();
+                inputFeld.scrollIntoView({ behavior: 'smooth' });
+            }
+        }, 1000);
+    }
+
+    function starteKamera() {
+        document.getElementById('scanner-container').style.display = 'block';
+        html5QrcodeScanner = new Html5Qrcode("reader");
+        
+        html5QrcodeScanner.start(
+            { facingMode: "environment" }, 
+            { fps: 10, qrbox: { width: 250, height: 150 } }, 
+            onScanSuccess
+        ).then(() => {
+            starteTimer(); // Erst wenn Kamera läuft, startet die Uhr
+        })
+        .catch(err => {
+            alert("Kamera-Fehler: " + err);
+            stoppeKamera();
+        });
+    }
+
+    function stoppeKamera() {
+        if (countdownTimer) clearInterval(countdownTimer);
+        
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.stop().then(() => {
+                document.getElementById('scanner-container').style.display = 'none';
+            }).catch(() => {
+                document.getElementById('scanner-container').style.display = 'none';
+            });
+        } else {
+            document.getElementById('scanner-container').style.display = 'none';
+        }
+    }
+
+    // Klick-Event für die manuelle Bestätigung
+    document.getElementById('btnManuellAbschicken').addEventListener('click', function() {
+        const input = document.getElementById('inputBarcodeManuell');
+        if (input.value.trim() !== "") {
+            verarbeiteCode(input.value);
+            input.value = ""; // Feld wieder leeren
+        }
+    });
+
+    document.getElementById('btnScanStarten').addEventListener('click', starteKamera);
+    document.getElementById('btnScanStoppen').addEventListener('click', stoppeKamera);
+
+    tabelleInitialisieren();
+</script>
+
+</body>
+</html>
