@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="manifest" href="manifest.json">
     <title>Meine Liste</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     
@@ -236,71 +237,11 @@
         });
     }
 
-    // Globale Hilfsvariablen für die Scan-Beruhigung (ganz oben im Script oder direkt über der Funktion platzieren)
-    let letzterGescannterCode = "";
-    let scanTrefferZaehler = 0;
-
-    // OPTIMIERTE PRÜFUNG: Strengere mathematische Kontrolle für EAN/ISBN
-    function istGueltigerBarcode(code) {
-        const sauber = code.replace(/[-\s]/g, "");
-        
-        // Reine Zahlenprüfung und Längen-Check (8, 12 oder 13 Stellen)
-        if (!/^\d+$/.test(sauber) || (sauber.length !== 8 && sauber.length !== 12 && sauber.length !== 13)) {
-            return false;
-        }
-        
-        let summe = 0;
-        for (let i = 0; i < sauber.length - 1; i++) {
-            let ziffer = parseInt(sauber.charAt(i));
-            if (sauber.length === 13) {
-                summe += (i % 2 === 0) ? ziffer : ziffer * 3;
-            } else {
-                summe += (i % 2 === 0) ? ziffer * 3 : ziffer;
-            }
-        }
-        
-        const berechnetePruefziffer = (10 - (summe % 10)) % 10;
-        const echtePruefziffer = parseInt(sauber.charAt(sauber.length - 1));
-        
-        return berechnetePruefziffer === echtePruefziffer;
-    }
-
-    // DER HOCHSICHERHEITS-SCANNER (Doppelte Absicherung gegen Geister-Scans)
     function onScanSuccess(decodedText, decodedResult) {
-        const barcode = decodedText.trim();
-        
-        // Schritt 1: Mathematischer Grund-Check
-        if (!istGueltigerBarcode(barcode)) {
-            console.log("Mathematisch ungültig ignorieren: " + barcode);
-            return; 
-        }
-        
-        // Schritt 2: Der Doppel-Check! 
-        // Wenn der neue Code nicht dem direkt davor entspricht, fangen wir an zu zählen
-        if (barcode !== letzterGescannterCode) {
-            letzterGescannterCode = barcode;
-            scanTrefferZaehler = 1; // Erster Treffer gemerkt
-            console.log("Code gemerkt, warte auf Bestätigung: " + barcode);
-            return; // Wir brechen ab und warten aufs nächste Bild der Kamera!
-        } else {
-            // Der Code ist identisch mit dem Bild davor! Wir erhöhen den Zähler
-            scanTrefferZaehler++;
-        }
-        
-        // Erst wenn die Kamera den exakt gleichen Code 2-mal hintereinander scharf erfasst hat,
-        // schlagen wir wirklich zu! Das senkt Fehllesungen gegen 0%.
-        if (scanTrefferZaehler >= 2) {
-            console.log("Code 2x bestätigt! Starte Verarbeitung: " + barcode);
-            
-            // Zähler zurücksetzen für den nächsten Scan
-            letzterGescannterCode = "";
-            scanTrefferZaehler = 0;
-            
-            // Kamera stoppen und Produkt laden
-            stoppeKamera();
-            verarbeiteCode(barcode);
-        }
+        stoppeKamera();
+        verarbeiteCode(decodedText);
     }
+
     // TIMER LOGIK
     function starteTimer() {
         verbleibendeSekunden = 45;
@@ -323,37 +264,16 @@
         }, 1000);
     }
 
-  function starteKamera() {
+    function starteKamera() {
         document.getElementById('scanner-container').style.display = 'block';
+        html5QrcodeScanner = new Html5Qrcode("reader");
         
-        html5QrcodeScanner = new Html5Qrcode("reader", { 
-            formatsToSupport: [ 
-                Html5QrcodeSupportedFormats.EAN_13, 
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.ISBN_13
-            ] 
-        });
-        
-        // HIER SIND DIE AUTOMATISCHEN FOKUS-TRICKS:
         html5QrcodeScanner.start(
-            { 
-                facingMode: "environment" // Nutzt die Hauptkamera
-            }, 
-            { 
-                fps: 15, 
-                qrbox: { width: 280, height: 120 },
-                // Diese versteckten Befehle zwingen den Browser, den Autofokus zu aktivieren, falls das Handy es erlaubt:
-                videoConstraints: {
-                    facingMode: "environment",
-                    focusMode: "continuous",    // Kontinuierlicher Autofokus (Dauerschärfe)
-                    advanced: [{
-                        focusMode: "continuous" // Sicherheits-Wiederholung für neuere Android-Handys
-                    }]
-                }
-            }, 
+            { facingMode: "environment" }, 
+            { fps: 10, qrbox: { width: 250, height: 150 } }, 
             onScanSuccess
         ).then(() => {
-            starteTimer();
+            starteTimer(); // Erst wenn Kamera läuft, startet die Uhr
         })
         .catch(err => {
             alert("Kamera-Fehler: " + err);
@@ -388,7 +308,6 @@
     document.getElementById('btnScanStoppen').addEventListener('click', stoppeKamera);
 
     tabelleInitialisieren();
-   
 </script>
 
 </body>

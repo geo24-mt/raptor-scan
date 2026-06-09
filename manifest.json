@@ -1,0 +1,9 @@
+{
+  "name": "Raptor-Scan",
+  "short_name": "RaptorScan",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#2980b9",
+  "orientation": "portrait"
+}
