@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json">
     <title>Meine Liste</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     
@@ -85,6 +85,11 @@
     let countdownTimer = null;
     let verbleibendeSekunden = 45;
 
+    // Hilfsvariablen für flüssiges Scannen ohne Hänger
+    let letzterGescannterCode = "";
+    let scanTrefferZaehler = 0;
+    let istGeradeAmVerarbeiten = false;
+
     function tabelleInitialisieren() {
         const urlParameter = new URLSearchParams(window.location.search);
         listenIndex = urlParameter.get('listeIndex');
@@ -116,12 +121,6 @@
         
         document.getElementById('ansichtListenName').innerText = listenStruktur.name;
         
-        const zurückBtn = document.querySelector('.btn-back');
-        if (zurückBtn) {
-            if (nameAusUrl) { zurückBtn.innerText = "← Zurück zum Baukasten"; zurückBtn.href = "index.html"; }
-            else { zurückBtn.innerText = "← Zurück zur Übersicht"; zurückBtn.href = "dashboard.html"; }
-        }
-        
         const kopfZeile = document.getElementById('tabellenKopfZeile');
         let kopfHTML = '<th>Barcode</th>';
         
@@ -133,23 +132,25 @@
         });
         kopfZeile.innerHTML = kopfHTML;
 
+        const tabellenInhalt = document.getElementById('tabellenInhalt');
+        tabellenInhalt.innerHTML = "";
+
         if (listenStruktur.produkte && listenStruktur.produkte.length > 0) {
             document.getElementById('leereMeldung').style.display = 'none';
-            const tabellenInhalt = document.getElementById('tabellenInhalt');
-            tabellenInhalt.innerHTML = "";
             
             listenStruktur.produkte.forEach((p, pIndex) => {
                 const zeile = document.createElement('tr');
                 let zeilenHTML = `<td><strong>${p.barcode}</strong></td>`;
                 
                 attributeArray.forEach(attributName => {
-                    // Jede Zelle bekommt die Klasse "edtierbar" und eine Klickfunktion spendiert!
                     zeilenHTML += `<td class="edtierbar" onclick="zelleManuellEditieren(${pIndex}, '${attributName}')">${p[attributName] || '-'}</td>`;
                 });
                 
                 zeile.innerHTML = zeilenHTML;
                 tabellenInhalt.appendChild(zeile);
             });
+        } else {
+            document.getElementById('leereMeldung').style.display = 'block';
         }
     }
 
@@ -160,10 +161,9 @@
         produktDaten.barcode = barcode;
         alleListen[listenIndex].produkte.push(produktDaten);
         localStorage.setItem('meineAppListen', JSON.stringify(alleListen));
-        tabelleInitialisieren(); // Tabelle neu zeichnen, um Klick-Events zu aktivieren
+        tabelleInitialisieren();
     }
 
-    // NEU: Funktion um Zellen direkt durch Anklicken manuell zu ändern!
     function zelleManuellEditieren(pIndex, attributName) {
         const alterWert = alleListen[listenIndex].produkte[pIndex][attributName] || "";
         const neuerWert = prompt(`Wert für "${attributName}" ändern:`, alterWert);
@@ -171,23 +171,22 @@
         if (neuerWert !== null) {
             alleListen[listenIndex].produkte[pIndex][attributName] = neuerWert;
             localStorage.setItem('meineAppListen', JSON.stringify(alleListen));
-            tabelleInitialisieren(); // Anzeige aktualisieren
+            tabelleInitialisieren();
         }
     }
 
-    // VERARBEITUNG DER NUMMER (Egal ob Kamera oder Tastatur)
     function verarbeiteCode(barcode) {
         const saubererBarcode = barcode.trim();
-        if (!saubererBarcode) return;
+        if (!saubererBarcode) {
+            istGeradeAmVerarbeiten = false;
+            return;
+        }
 
         document.getElementById('leereMeldung').style.display = 'none';
         
-        // Prüfen, ob wir die Attribute als Text oder Array haben
         const aktuelleAttribute = Array.isArray(alleListen[listenIndex].attrs) 
             ? alleListen[listenIndex].attrs 
             : alleListen[listenIndex].attrs.split(',');
-
-        console.log("Suche in der Medien-Datenbank...");
         
         fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${saubererBarcode}&format=json&jscmd=data`)
         .then(response => response.json())
@@ -206,8 +205,8 @@
                 });
                 speichereProduktInListe(saubererBarcode, temporaereDaten);
                 alert(`Medium erkannt:\n${bucheintrag.title}`);
+                istGeradeAmVerarbeiten = false;
             } else {
-                // Weiche auf Lebensmittel aus
                 fetch(`https://world.openfoodfacts.org/api/v2/product/${saubererBarcode}.json`)
                 .then(response => response.json())
                 .then(foodData => {
@@ -222,34 +221,29 @@
                         speichereProduktInListe(saubererBarcode, temporaereDaten);
                         alert(`Lebensmittel erkannt:\n${p.product_name || 'Produkt'}`);
                     } else {
-                        // Gar nix gefunden -> Leere Zellen zum Selberbefüllen erstellen!
                         alert(`Code ${saubererBarcode} unbekannt. Du kannst die Felder jetzt manuell durch Anklicken befüllen!`);
                         aktuelleAttribute.forEach(function(attributName) {
                             temporaereDaten[attributName] = "Klicke zum Eintragen";
                         });
                         speichereProduktInListe(saubererBarcode, temporaereDaten);
                     }
-                });
+                    istGeradeAmVerarbeiten = false;
+                })
+                .catch(() => { istGeradeAmVerarbeiten = false; });
             }
         })
         .catch(err => {
             console.error("Fehler:", err);
+            istGeradeAmVerarbeiten = false;
         });
     }
 
-    // Globale Hilfsvariablen für die Scan-Beruhigung (ganz oben im Script oder direkt über der Funktion platzieren)
-    let letzterGescannterCode = "";
-    let scanTrefferZaehler = 0;
-
-    // OPTIMIERTE PRÜFUNG: Strengere mathematische Kontrolle für EAN/ISBN
+    // Präzise mathematische Kontrolle für EAN/ISBN
     function istGueltigerBarcode(code) {
         const sauber = code.replace(/[-\s]/g, "");
-        
-        // Reine Zahlenprüfung und Längen-Check (8, 12 oder 13 Stellen)
         if (!/^\d+$/.test(sauber) || (sauber.length !== 8 && sauber.length !== 12 && sauber.length !== 13)) {
             return false;
         }
-        
         let summe = 0;
         for (let i = 0; i < sauber.length - 1; i++) {
             let ziffer = parseInt(sauber.charAt(i));
@@ -259,49 +253,40 @@
                 summe += (i % 2 === 0) ? ziffer * 3 : ziffer;
             }
         }
-        
         const berechnetePruefziffer = (10 - (summe % 10)) % 10;
         const echtePruefziffer = parseInt(sauber.charAt(sauber.length - 1));
-        
         return berechnetePruefziffer === echtePruefziffer;
     }
 
-    // DER HOCHSICHERHEITS-SCANNER (Doppelte Absicherung gegen Geister-Scans)
+    // FLÜSSIGER HOCHSICHERHEITS-SCANNER
     function onScanSuccess(decodedText, decodedResult) {
+        if (istGeradeAmVerarbeiten) return; // Blockiert Mehrfach-Scans während des Ladens
+
         const barcode = decodedText.trim();
         
-        // Schritt 1: Mathematischer Grund-Check
         if (!istGueltigerBarcode(barcode)) {
-            console.log("Mathematisch ungültig ignorieren: " + barcode);
-            return; 
+            return; // Schrott-Scan sofort verwerfen
         }
         
-        // Schritt 2: Der Doppel-Check! 
-        // Wenn der neue Code nicht dem direkt davor entspricht, fangen wir an zu zählen
-        if (barcode !== letzterGescannterCode) {
-            letzterGescannterCode = barcode;
-            scanTrefferZaehler = 1; // Erster Treffer gemerkt
-            console.log("Code gemerkt, warte auf Bestätigung: " + barcode);
-            return; // Wir brechen ab und warten aufs nächste Bild der Kamera!
-        } else {
-            // Der Code ist identisch mit dem Bild davor! Wir erhöhen den Zähler
+        // Flüssiger Doppel-Check
+        if (barcode === letzterGescannterCode) {
             scanTrefferZaehler++;
+        } else {
+            letzterGescannterCode = barcode;
+            scanTrefferZaehler = 1;
         }
         
-        // Erst wenn die Kamera den exakt gleichen Code 2-mal hintereinander scharf erfasst hat,
-        // schlagen wir wirklich zu! Das senkt Fehllesungen gegen 0%.
+        // Erst wenn die Kamera den Code 2-mal stabil hintereinander erwischt hat
         if (scanTrefferZaehler >= 2) {
-            console.log("Code 2x bestätigt! Starte Verarbeitung: " + barcode);
-            
-            // Zähler zurücksetzen für den nächsten Scan
+            istGeradeAmVerarbeiten = true; 
             letzterGescannterCode = "";
             scanTrefferZaehler = 0;
             
-            // Kamera stoppen und Produkt laden
             stoppeKamera();
             verarbeiteCode(barcode);
         }
     }
+
     // TIMER LOGIK
     function starteTimer() {
         verbleibendeSekunden = 45;
@@ -316,7 +301,6 @@
                 stoppeKamera();
                 alert("Kamera-Timeout: Code wurde nicht automatisch erkannt. Bitte gib die Nummer manuell ein!");
                 
-                // Fokus automatisch auf das manuelle Eingabefeld setzen
                 const inputFeld = document.getElementById('inputBarcodeManuell');
                 inputFeld.focus();
                 inputFeld.scrollIntoView({ behavior: 'smooth' });
@@ -324,8 +308,11 @@
         }, 1000);
     }
 
-  function starteKamera() {
+    function starteKamera() {
         document.getElementById('scanner-container').style.display = 'block';
+        letzterGescannterCode = "";
+        scanTrefferZaehler = 0;
+        istGeradeAmVerarbeiten = false;
         
         html5QrcodeScanner = new Html5Qrcode("reader", { 
             formatsToSupport: [ 
@@ -335,21 +322,15 @@
             ] 
         });
         
-        // HIER SIND DIE AUTOMATISCHEN FOKUS-TRICKS:
         html5QrcodeScanner.start(
+            { facingMode: "environment" }, 
             { 
-                facingMode: "environment" // Nutzt die Hauptkamera
-            }, 
-            { 
-                fps: 15, 
-                qrbox: { width: 280, height: 120 },
-                // Diese versteckten Befehle zwingen den Browser, den Autofokus zu aktivieren, falls das Handy es erlaubt:
+                fps: 20, // Erhöht auf 20 für super geschmeidige Erkennung
+                qrbox: { width: 280, height: 140 },
                 videoConstraints: {
                     facingMode: "environment",
-                    focusMode: "continuous",    // Kontinuierlicher Autofokus (Dauerschärfe)
-                    advanced: [{
-                        focusMode: "continuous" // Sicherheits-Wiederholung für neuere Android-Handys
-                    }]
+                    focusMode: "continuous",
+                    advanced: [{ focusMode: "continuous" }]
                 }
             }, 
             onScanSuccess
@@ -376,12 +357,11 @@
         }
     }
 
-    // Klick-Event für die manuelle Bestätigung
     document.getElementById('btnManuellAbschicken').addEventListener('click', function() {
         const input = document.getElementById('inputBarcodeManuell');
         if (input.value.trim() !== "") {
             verarbeiteCode(input.value);
-            input.value = ""; // Feld wieder leeren
+            input.value = "";
         }
     });
 
@@ -389,7 +369,6 @@
     document.getElementById('btnScanStoppen').addEventListener('click', stoppeKamera);
 
     tabelleInitialisieren();
-   
 </script>
 
 </body>
