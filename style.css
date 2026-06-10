@@ -233,6 +233,7 @@ td strong {
     margin: 10px 0;
     overflow-x: auto; /* Nur wenn nötig, erscheint ein Scrollbalken */
     -webkit-overflow-scrolling: touch; 
+	touch-action: pan-y;
 }
 .btn-loeschen {
     background: #ef4444; /* Ein auffälliges Rot */
