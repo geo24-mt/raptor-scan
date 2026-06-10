@@ -4,26 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="manifest" href="manifest.json">
-	<script>window.location.href = 'dashboard.html';</script>
+	<link rel="stylesheet" href="style.css">
+
     <title>Mein Listen-Baukasten</title>
-    <!-- Später verlinken wir hier deine CSS-Datei -->
-    <style>
-        /* Ein ganz einfaches Grundstyling, damit es direkt ordentlich aussieht */
-        body { font-family: sans-serif; padding: 20px; background-color: #f5f5f5; }
-        .container { max-width: 500px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-weight: bold; margin-bottom: 5px; }
-        input, select, button { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background-color: #3498db; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:hover { background-color: #2980b9; }
-        .attribut-chip { display: inline-block; background: #e0e0e0; padding: 5px 10px; margin: 5px 5px 5px 0; border-radius: 15px; font-size: 14px; }
-    </style>
+   
 </head>
 <body>
 
 <div class="container">
     <h2>Neue Liste erstellen</h2>
-    <a href="dashboard.html" class="btn" style="display: inline-block; background-color: #2980b9; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; font-weight: bold; margin-bottom: 20px; font-size: 14px;">🗂️ Zu meinen Sammlungen (Dashboard)</a>
+    <a href="dashboard.html" class="btn">🗂️ Zu meinen Sammlungen (Dashboard)</a>
     <!-- 1. Schritt: Name der Liste -->
     <div class="form-group">
         <label for="listenName">Wie soll die Liste heißen?</label>
@@ -71,10 +61,10 @@
     </div>
     
     <!-- 3. Schritt: Finale Erstellung -->
-    <button type="button" id="btnSpeichern" style="background-color: #2ecc71;">Liste jetzt anlegen</button>
+    <button type="button" id="btnSpeichern" >Liste jetzt anlegen</button>
 </div>
 
-<!-- Hier kommt gleich das JavaScript ins Spiel -->
+
 <script>
     // Wir holen uns die Elemente aus dem HTML
     const dropdown = document.getElementById('attributAuswahl');
@@ -84,7 +74,7 @@
     // In diesem Array merken wir uns, was der Nutzer angeklickt hat
     let merkListeFuerAttribute = [];
 
-    // Event: Wenn man auf "Eigenschaft hinzufügen" klickt
+
     // Event: Wenn man auf "Eigenschaft hinzufügen" klickt
     btnAdd.addEventListener('click', function() {
         const ausgewaehlterWert = dropdown.value;
@@ -125,9 +115,7 @@
     const inputListenName = document.getElementById('listenName');
 
     // 2. Event: Wenn man auf "Liste jetzt anlegen" klickt
-    // Event: Wenn man auf "Liste jetzt anlegen" klickt
-   // Event: Wenn man auf "Liste jetzt anlegen" klickt
-    // Event: Wenn man auf "Liste jetzt anlegen" klickt
+
     btnSpeichern.addEventListener('click', function() {
         const namederListe = inputListenName.value.trim();
         

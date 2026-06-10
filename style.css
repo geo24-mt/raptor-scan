@@ -1,0 +1,223 @@
+/* Eine Schrift mit mehr Charakter */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&display=swap');
+
+:root {
+    --primary: #0f172a;
+    --accent: #10b981; /* Ein knalliges Rot als Akzent gegen das Langweilige */
+    --bg-color: #f1f5f9;
+}
+
+body {
+    font-family: 'Outfit', sans-serif;
+    background-color: var(--bg-color);
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+	background: url('monstera.png') center/cover fixed no-repeat;
+}
+
+.container {
+    background: rgba(255,255,255,0.8);
+    padding: 40px;
+    border-radius: 24px; /* Deutlich rundere Ecken wirken weniger starr */
+    box-shadow: 0 20px 40px rgba(0,0,0,0.08); /* Stärkerer Schatten für Tiefe */
+    text-align: center;
+    max-width: 450px;
+}
+
+/* Buttons jetzt mit Power */
+.btn {
+    background-color: var(--primary);
+    color: white !important;
+    padding: 16px 24px;
+    border-radius: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: block;
+    margin: 15px 0;
+    transition: 0.3s;
+	text-decoration: none;
+}
+
+.btn:hover {
+    background-color: var(--accent);
+    transform: translateY(-2px);
+}
+.btn-liste {
+    display: flex;
+    justify-content: space-between; /* Text links, X rechts */
+    align-items: center;
+    background-color: var(--primary);
+    color: white !important;
+    padding: 16px 20px;
+    border-radius: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    text-decoration: none !important;
+    margin: 10px 0;
+    cursor: pointer;
+}
+
+.btn-delete {
+    background: rgba(255,255,255,0.2);
+    padding: 5px 10px;
+    border-radius: 6px;
+    margin-left: 15px;
+    color: white;
+}
+/* Styling für den Baukasten (index.html) */
+
+/* Formular-Design für den Baukasten */
+.form-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+select, .input-text {
+    width: 100%;
+    padding: 14px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 18px;
+    font-family: 'Outfit', sans-serif;
+    background: white;
+}
+
+/* Button-Anpassung für den Baukasten */
+button {
+    width: 100%;
+    padding: 14px;
+    margin-top: 10px;
+    border-radius: 12px;
+    border: none;
+    background-color: var(--primary);
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Outfit', sans-serif;
+}
+
+#btnSpeichern {
+    background-color: var(--primary); /* Ein schickes Emerald-Grün */
+    font-size: 18px;
+}
+#btnSpeichern:hover {
+	background-color: var(--accent);
+    transform: translateY(-2px);
+	transition: 0.3s;
+}
+
+/* Stil für die "Chips" (Attribute) */
+#gewaehlteAttribute {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.chip {
+    background: #e2e8f0;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+}
+/* Zentrierung und Design für das Dropdown */
+select {
+    text-align-last: center; /* Zentriert den Text im Dropdown */
+    text-align: center;      /* Fallback für einige Browser */
+    appearance: none;        /* Entfernt Standard-Browser-Styling */
+    padding: 14px;
+    background: white;
+}
+
+/* Konsistentes Design für alle Input-Felder und das Dropdown */
+input[type="text"], select {
+    width: 100%;
+    padding: 14px;
+    margin: 10px 0;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 16px;
+    font-family: 'Outfit', sans-serif;
+    box-sizing: border-box; /* Wichtig, damit das Padding nicht die Breite sprengt */
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+th {
+    background-color: var(--primary);
+    color: white;
+    padding: 12px;
+    font-size: 13px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+td {
+    padding: 12px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 15px;
+    color: #1e293b; /* Normales Schwarz/Dunkelgrau */
+}
+
+/* Klickbare Zellen hervorheben, aber dezent */
+.klickbar {
+    cursor: pointer;
+
+}
+
+.klickbar:hover {
+    background-color: #f1f5f9;
+}
+td strong {
+    font-weight: 400; 
+}
+/* Der Standardzustand */
+.barcode-col {
+    transition: all 0.3s ease-in-out;
+    width: 150px;
+    opacity: 1;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+/* Der eingeklappte Zustand */
+.barcode-col.collapsed {
+    width: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    border: none !important;
+    opacity: 0;
+    display: none; /* Das lässt den weißen Kasten verschwinden */
+}
+.btn-loeschen {
+    background: #ef4444; /* Ein auffälliges Rot */
+    color: white;
+    border: none;
+    padding: 2px 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 10px;
+}
+
+.btn-loeschen:hover {
+    background: #dc2626; /* Dunkler beim Drüberfahren */
+}

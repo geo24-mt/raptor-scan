@@ -4,46 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
+	<link rel="stylesheet" href="style.css">
     <title>Meine Liste</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     
-    <style>
-        body { font-family: sans-serif; padding: 20px; background-color: #f5f5f5; }
-        .container { max-width: 900px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin: 0 auto; }
-        .header-box { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        h2 { margin: 0; }
-        .btn { padding: 10px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: white; text-decoration: none; }
-        .btn-back { background-color: #7f8c8d; font-size: 14px; display: inline-block; }
-        .btn-scan { background-color: #e67e22; }
-        
-        /* SCANNER & MANUELL STYLE */
-        #scanner-container { max-width: 500px; margin: 20px auto; display: none; background: #333; padding: 15px; border-radius: 8px; color: white; }
-        #reader { width: 100%; background: white; }
-        .btn-stop { background-color: #e74c3c; width: 100%; margin-top: 10px; padding: 12px; }
-        #timer-anzeige { text-align: center; font-weight: bold; margin-bottom: 8px; color: #f1c40f; }
-        
-        .manuell-box { background: #ecf0f1; padding: 15px; border-radius: 6px; margin: 20px 0; display: flex; gap: 10px; align-items: center; }
-        .input-text { padding: 10px; border: 1px solid #bdc3c7; border-radius: 4px; flex-grow: 1; font-size: 16px; }
-        .btn-speichern { background-color: #2ecc71; }
-
-        /* TABELLEN STYLE */
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #34495e; color: white; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        .leere-meldung { text-align: center; color: #7f8c8d; padding: 20px; font-style: italic; }
-        
-        /* Macht Tabellenzellen als Eingabefeld erkennbar */
-        .edtierbar { cursor: pointer; background-color: #fffde7; }
-        .edtierbar:hover { background-color: #fff9c4; }
-    </style>
 </head>
 <body>
 
 <div class="container">
     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-        <a href="index.html" class="btn" style="background-color: #7f8c8d; font-size: 14px; flex-grow: 1; text-align: center; text-decoration: none;">📋 Zum Baukasten</a>
-        <a href="dashboard.html" class="btn" style="background-color: #2980b9; font-size: 14px; flex-grow: 1; text-align: center; text-decoration: none;">🗂️ Zum Dashboard</a>
+        <a href="index.html" class="btn" >📋 Zum Baukasten</a>
+        <a href="dashboard.html" class="btn" >🗂️ Zum Dashboard</a>
     </div>
     
     <div class="header-box" style="margin-top: 15px;">
@@ -75,299 +46,198 @@
     </div>
 </div>
 
+
+<div id="filterMenu" style="display:none; position:absolute; background:white; border:1px solid #ccc; padding:10px; z-index:100; border-radius:8px;">
+    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+        <strong>Filter</strong>
+        <span onclick="document.getElementById('filterMenu').style.display='none'" style="cursor:pointer; font-weight:bold;">✕</span>
+    </div>
+    
+    <input type="text" id="filterSuchFeld" placeholder="Suche..." onkeyup="filterTabelle()">
+    <div id="sortOptionen" style="margin-top:5px;">
+        <button onclick="sortiereTabelle('auf')">▲ A-Z</button>
+        <button onclick="sortiereTabelle('ab')">▼ Z-A</button>
+        <button onclick="filterLoeschen()">Filter löschen</button>
+    </div>
+</div>
+
 <script>
+    // --- GLOBALE VARIABLEN ---
     let html5QrcodeScanner = null;
-    let anzahlSpalten = 0;
     let listenIndex = null;
     let alleListen = [];
-    
-    // Timer-Variablen
-    let countdownTimer = null;
-    let verbleibendeSekunden = 45;
-
-    // Hilfsvariablen für flüssiges Scannen ohne Hänger
-    let letzterGescannterCode = "";
-    let scanTrefferZaehler = 0;
+    let attributeArray = [];
+    let aktuellesFilterAttribut = "";
     let istGeradeAmVerarbeiten = false;
 
-    function tabelleInitialisieren() {
-        const urlParameter = new URLSearchParams(window.location.search);
-        listenIndex = urlParameter.get('listeIndex');
-        const nameAusUrl = urlParameter.get('name');
-        const attributeAusUrl = urlParameter.get('attrs');
-        
-        let listenStruktur = null;
-        
-        const gespeicherteDaten = localStorage.getItem('meineAppListen');
-        if (gespeicherteDaten) {
-            alleListen = JSON.parse(gespeicherteDaten);
-            if (listenIndex !== null && alleListen[listenIndex]) {
-                listenStruktur = alleListen[listenIndex];
-            }
-        } 
-        
-        if (!listenStruktur && nameAusUrl && attributeAusUrl) {
-            listenStruktur = { name: nameAusUrl, attrs: attributeAusUrl, produkte: [] };
-            if (!Array.isArray(alleListen)) { alleListen = []; }
-            if (listenIndex === null) { listenIndex = 0; }
-            alleListen[listenIndex] = listenStruktur;
-        }
-        
-        if (!listenStruktur) {
-            alert("Hinweis: Bitte öffne die Liste direkt über das Dashboard!");
-            window.location.href = 'dashboard.html';
-            return;
-        }
-        
-        document.getElementById('ansichtListenName').innerText = listenStruktur.name;
-        
-        const kopfZeile = document.getElementById('tabellenKopfZeile');
-        let kopfHTML = '<th>Barcode</th>';
-        
-        const attributeArray = Array.isArray(listenStruktur.attrs) ? listenStruktur.attrs : listenStruktur.attrs.split(',');
-        anzahlSpalten = attributeArray.length;
+    // --- TABELLEN LOGIK ---
+function tabelleInitialisieren() {
+    const urlParameter = new URLSearchParams(window.location.search);
+    listenIndex = urlParameter.get('listeIndex');
+    const gespeicherteDaten = localStorage.getItem('meineAppListen');
+    
+    if (gespeicherteDaten) alleListen = JSON.parse(gespeicherteDaten);
+    
+    let listenStruktur = alleListen[listenIndex];
+    if (!listenStruktur) return;
 
-        attributeArray.forEach(function(attributName) {
-            kopfHTML += `<th>${attributName}</th>`;
-        });
-        kopfZeile.innerHTML = kopfHTML;
+    document.getElementById('ansichtListenName').innerText = listenStruktur.name;
+    attributeArray = Array.isArray(listenStruktur.attrs) ? listenStruktur.attrs : listenStruktur.attrs.split(',');
 
+    // Kopfzeile bauen
+    const kopfZeile = document.getElementById('tabellenKopfZeile');
+    let kopfHTML = `<th class="barcode-col" onclick="toggleBarcodeSpalte()" style="cursor:pointer;">Barcode ↤</th>`;
+    attributeArray.forEach(attr => {
+        kopfHTML += `<th>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                ${attr}
+                <span class="filter-trichter" onclick="oeffneFilterMenu(event, '${attr}')" style="cursor:pointer; margin-left:5px;">▾</span>
+            </div>
+        </th>`;
+    });
+    kopfHTML += `<th></th>`;
+    kopfZeile.innerHTML = kopfHTML;
+
+    // PRODUKTE ANZEIGEN (Die einzige Stelle, an der gerendert wird)
+    const leereMeldung = document.getElementById('leereMeldung');
+    if (listenStruktur.produkte && listenStruktur.produkte.length > 0) {
+        leereMeldung.style.display = 'none';
+        renderTabellenInhalt(listenStruktur.produkte);
+    } else {
+        leereMeldung.style.display = 'block';
+        document.getElementById('tabellenInhalt').innerHTML = "";
+    }
+}
+
+    function renderTabellenInhalt(produkte) {
         const tabellenInhalt = document.getElementById('tabellenInhalt');
         tabellenInhalt.innerHTML = "";
-
-        if (listenStruktur.produkte && listenStruktur.produkte.length > 0) {
-            document.getElementById('leereMeldung').style.display = 'none';
-            
-            listenStruktur.produkte.forEach((p, pIndex) => {
-                const zeile = document.createElement('tr');
-                let zeilenHTML = `<td><strong>${p.barcode}</strong></td>`;
-                
-                attributeArray.forEach(attributName => {
-                    zeilenHTML += `<td class="edtierbar" onclick="zelleManuellEditieren(${pIndex}, '${attributName}')">${p[attributName] || '-'}</td>`;
-                });
-                
-                zeile.innerHTML = zeilenHTML;
-                tabellenInhalt.appendChild(zeile);
+        produkte.forEach((p, pIndex) => {
+            const zeile = document.createElement('tr');
+            let zeilenHTML = `<td class="barcode-col"><strong>${p.barcode}</strong></td>`;
+            attributeArray.forEach(attr => {
+                zeilenHTML += `<td class="edtierbar klickbar" onclick="zelleManuellEditieren(${pIndex}, '${attr}')">${p[attr] || '-'}</td>`;
             });
-        } else {
-            document.getElementById('leereMeldung').style.display = 'block';
+            zeilenHTML += `<td style="text-align:center;"><button class="btn-loeschen" onclick="loescheDatensatz(${pIndex})">✕</button></td>`;
+            zeile.innerHTML = zeilenHTML;
+            tabellenInhalt.appendChild(zeile);
+        });
+    }
+
+    // --- FILTER & SORTIERUNG ---
+    function oeffneFilterMenu(event, attr) {
+        const menu = document.getElementById('filterMenu');
+        aktuellesFilterAttribut = attr;
+        menu.style.display = 'block';
+        menu.style.left = (event.pageX - 100) + 'px';
+        menu.style.top = (event.pageY + 10) + 'px';
+        setTimeout(() => document.getElementById('filterSuchFeld').focus(), 50);
+    }
+
+    function filterTabelle() {
+        const suchWert = document.getElementById('filterSuchFeld').value.toLowerCase();
+        const zeilen = document.getElementById('tabellenInhalt').getElementsByTagName('tr');
+        const index = attributeArray.indexOf(aktuellesFilterAttribut) + 1;
+        
+        for (let i = 0; i < zeilen.length; i++) {
+            const zelle = zeilen[i].getElementsByTagName('td')[index];
+            zeilen[i].style.display = zelle.innerText.toLowerCase().includes(suchWert) ? "" : "none";
         }
     }
 
-    function speichereProduktInListe(barcode, produktDaten) {
-        if (!alleListen[listenIndex].produkte) {
-            alleListen[listenIndex].produkte = [];
+    function sortiereTabelle(richtung) {
+        let produkte = alleListen[listenIndex].produkte;
+        produkte.sort((a, b) => {
+            let valA = a[aktuellesFilterAttribut] || "";
+            let valB = b[aktuellesFilterAttribut] || "";
+            return richtung === 'auf' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        });
+        renderTabellenInhalt(produkte);
+        document.getElementById('filterMenu').style.display = "none";
+    }
+
+    function filterLoeschen() {
+        document.getElementById('filterSuchFeld').value = "";
+        const zeilen = document.getElementById('tabellenInhalt').getElementsByTagName('tr');
+        for (let i = 0; i < zeilen.length; i++) zeilen[i].style.display = "";
+        document.getElementById('filterMenu').style.display = "none";
+    }
+
+    // --- KLICK-LOGIK ---
+    window.onclick = function(event) {
+        if (!event.target.matches('.filter-trichter') && !event.target.closest('#filterMenu')) {
+            document.getElementById('filterMenu').style.display = "none";
         }
+    }
+
+    // --- SCANNER & DATEN-LOGIK ---
+    function speichereProduktInListe(barcode, produktDaten) {
         produktDaten.barcode = barcode;
         alleListen[listenIndex].produkte.push(produktDaten);
         localStorage.setItem('meineAppListen', JSON.stringify(alleListen));
         tabelleInitialisieren();
     }
 
-    function zelleManuellEditieren(pIndex, attributName) {
-        const alterWert = alleListen[listenIndex].produkte[pIndex][attributName] || "";
-        const neuerWert = prompt(`Wert für "${attributName}" ändern:`, alterWert);
-        
-        if (neuerWert !== null) {
-            alleListen[listenIndex].produkte[pIndex][attributName] = neuerWert;
+    function verarbeiteCode(barcode) {
+        const saubererBarcode = barcode.trim();
+        fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${saubererBarcode}&format=json&jscmd=data`)
+        .then(res => res.json())
+        .then(data => {
+            const entry = data[`ISBN:${saubererBarcode}`];
+            let daten = {};
+            attributeArray.forEach(attr => daten[attr] = entry ? (attr === "Titel" ? entry.title : "-") : "-");
+            speichereProduktInListe(saubererBarcode, daten);
+        });
+    }
+
+    function onScanSuccess(decodedText) {
+        if (istGeradeAmVerarbeiten) return;
+        istGeradeAmVerarbeiten = true;
+        stoppeKamera();
+        verarbeiteCode(decodedText);
+    }
+
+    function starteKamera() {
+        document.getElementById('scanner-container').style.display = 'block';
+        html5QrcodeScanner = new Html5Qrcode("reader");
+        html5QrcodeScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess);
+    }
+
+    function stoppeKamera() {
+        if (html5QrcodeScanner) html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none');
+    }
+
+    // --- HELFER ---
+    function loescheDatensatz(pIndex) {
+        if (confirm("Wirklich löschen?")) {
+            alleListen[listenIndex].produkte.splice(pIndex, 1);
             localStorage.setItem('meineAppListen', JSON.stringify(alleListen));
             tabelleInitialisieren();
         }
     }
 
-    function verarbeiteCode(barcode) {
-        const saubererBarcode = barcode.trim();
-        if (!saubererBarcode) {
-            istGeradeAmVerarbeiten = false;
-            return;
-        }
-
-        document.getElementById('leereMeldung').style.display = 'none';
-        
-        const aktuelleAttribute = Array.isArray(alleListen[listenIndex].attrs) 
-            ? alleListen[listenIndex].attrs 
-            : alleListen[listenIndex].attrs.split(',');
-        
-        fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${saubererBarcode}&format=json&jscmd=data`)
-        .then(response => response.json())
-        .then(bookData => {
-            const bucheintrag = bookData[`ISBN:${saubererBarcode}`];
-            let temporaereDaten = {};
-            
-            if (bucheintrag) {
-                aktuelleAttribute.forEach(function(attributName) {
-                    if (attributName === "Titel" || attributName === "Name" || attributName === "Produkt") temporaereDaten[attributName] = bucheintrag.title || "Ohne Titel";
-                    else if (attributName === "Autor" || attributName === "Marke") temporaereDaten[attributName] = bucheintrag.authors ? bucheintrag.authors.map(a => a.name).join(', ') : "Unbekannt";
-                    else if (attributName === "Erscheinungsjahr") temporaereDaten[attributName] = bucheintrag.publish_date || "Unbekannt";
-                    else if (attributName === "Verlag") temporaereDaten[attributName] = bucheintrag.publishers ? bucheintrag.publishers.map(p => p.name).join(', ') : "Unbekannt";
-                    else if (attributName === "Seitenanzahl" || attributName === "Laufzeit" || attributName === "Inhalt") temporaereDaten[attributName] = bucheintrag.number_of_pages ? bucheintrag.number_of_pages + " Seiten" : "-";
-                    else temporaereDaten[attributName] = "-";
-                });
-                speichereProduktInListe(saubererBarcode, temporaereDaten);
-                alert(`Medium erkannt:\n${bucheintrag.title}`);
-                istGeradeAmVerarbeiten = false;
-            } else {
-                fetch(`https://world.openfoodfacts.org/api/v2/product/${saubererBarcode}.json`)
-                .then(response => response.json())
-                .then(foodData => {
-                    if (foodData.status === 1 && foodData.product) {
-                        const p = foodData.product;
-                        aktuelleAttribute.forEach(function(attributName) {
-                            if (attributName === "Titel" || attributName === "Name" || attributName === "Produkt") temporaereDaten[attributName] = p.product_name || "Unbekanntes Produkt";
-                            else if (attributName === "Marke" || attributName === "Verlag" || attributName === "Autor") temporaereDaten[attributName] = p.brands || "Unbekannte Marke";
-                            else if (attributName === "Seitenanzahl" || attributName === "Laufzeit" || attributName === "Inhalt") temporaereDaten[attributName] = p.quantity || "Keine Mengenangabe";
-                            else temporaereDaten[attributName] = "-";
-                        });
-                        speichereProduktInListe(saubererBarcode, temporaereDaten);
-                        alert(`Lebensmittel erkannt:\n${p.product_name || 'Produkt'}`);
-                    } else {
-                        alert(`Code ${saubererBarcode} unbekannt. Du kannst die Felder jetzt manuell durch Anklicken befüllen!`);
-                        aktuelleAttribute.forEach(function(attributName) {
-                            temporaereDaten[attributName] = "Klicke zum Eintragen";
-                        });
-                        speichereProduktInListe(saubererBarcode, temporaereDaten);
-                    }
-                    istGeradeAmVerarbeiten = false;
-                })
-                .catch(() => { istGeradeAmVerarbeiten = false; });
-            }
-        })
-        .catch(err => {
-            console.error("Fehler:", err);
-            istGeradeAmVerarbeiten = false;
-        });
-    }
-
-    // Präzise mathematische Kontrolle für EAN/ISBN
-    function istGueltigerBarcode(code) {
-        const sauber = code.replace(/[-\s]/g, "");
-        if (!/^\d+$/.test(sauber) || (sauber.length !== 8 && sauber.length !== 12 && sauber.length !== 13)) {
-            return false;
-        }
-        let summe = 0;
-        for (let i = 0; i < sauber.length - 1; i++) {
-            let ziffer = parseInt(sauber.charAt(i));
-            if (sauber.length === 13) {
-                summe += (i % 2 === 0) ? ziffer : ziffer * 3;
-            } else {
-                summe += (i % 2 === 0) ? ziffer * 3 : ziffer;
-            }
-        }
-        const berechnetePruefziffer = (10 - (summe % 10)) % 10;
-        const echtePruefziffer = parseInt(sauber.charAt(sauber.length - 1));
-        return berechnetePruefziffer === echtePruefziffer;
-    }
-
-    // FLÜSSIGER HOCHSICHERHEITS-SCANNER
-    function onScanSuccess(decodedText, decodedResult) {
-        if (istGeradeAmVerarbeiten) return; // Blockiert Mehrfach-Scans während des Ladens
-
-        const barcode = decodedText.trim();
-        
-        if (!istGueltigerBarcode(barcode)) {
-            return; // Schrott-Scan sofort verwerfen
-        }
-        
-        // Flüssiger Doppel-Check
-        if (barcode === letzterGescannterCode) {
-            scanTrefferZaehler++;
-        } else {
-            letzterGescannterCode = barcode;
-            scanTrefferZaehler = 1;
-        }
-        
-        // Erst wenn die Kamera den Code 2-mal stabil hintereinander erwischt hat
-        if (scanTrefferZaehler >= 2) {
-            istGeradeAmVerarbeiten = true; 
-            letzterGescannterCode = "";
-            scanTrefferZaehler = 0;
-            
-            stoppeKamera();
-            verarbeiteCode(barcode);
+    function zelleManuellEditieren(pIndex, attr) {
+        const val = prompt("Ändern zu:", alleListen[listenIndex].produkte[pIndex][attr]);
+        if (val !== null) {
+            alleListen[listenIndex].produkte[pIndex][attr] = val;
+            localStorage.setItem('meineAppListen', JSON.stringify(alleListen));
+            tabelleInitialisieren();
         }
     }
 
-    // TIMER LOGIK
-    function starteTimer() {
-        verbleibendeSekunden = 45;
-        document.getElementById('timer-anzeige').innerText = `Verbleibende Zeit: ${verbleibendeSekunden}s`;
-        
-        countdownTimer = setInterval(function() {
-            verbleibendeSekunden--;
-            document.getElementById('timer-anzeige').innerText = `Verbleibende Zeit: ${verbleibendeSekunden}s`;
-            
-            if (verbleibendeSekunden <= 0) {
-                clearInterval(countdownTimer);
-                stoppeKamera();
-                alert("Kamera-Timeout: Code wurde nicht automatisch erkannt. Bitte gib die Nummer manuell ein!");
-                
-                const inputFeld = document.getElementById('inputBarcodeManuell');
-                inputFeld.focus();
-                inputFeld.scrollIntoView({ behavior: 'smooth' });
-            }
-        }, 1000);
+    function toggleBarcodeSpalte() {
+        document.querySelectorAll('.barcode-col').forEach(z => z.classList.toggle('collapsed'));
     }
 
-    function starteKamera() {
-        document.getElementById('scanner-container').style.display = 'block';
-        letzterGescannterCode = "";
-        scanTrefferZaehler = 0;
-        istGeradeAmVerarbeiten = false;
-        
-        html5QrcodeScanner = new Html5Qrcode("reader", { 
-            formatsToSupport: [ 
-                Html5QrcodeSupportedFormats.EAN_13, 
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.ISBN_13
-            ] 
-        });
-        
-        html5QrcodeScanner.start(
-            { facingMode: "environment" }, 
-            { 
-                fps: 20, // Erhöht auf 20 für super geschmeidige Erkennung
-                qrbox: { width: 280, height: 140 },
-                videoConstraints: {
-                    facingMode: "environment",
-                    focusMode: "continuous",
-                    advanced: [{ focusMode: "continuous" }]
-                }
-            }, 
-            onScanSuccess
-        ).then(() => {
-            starteTimer();
-        })
-        .catch(err => {
-            alert("Kamera-Fehler: " + err);
-            stoppeKamera();
-        });
-    }
-
-    function stoppeKamera() {
-        if (countdownTimer) clearInterval(countdownTimer);
-        
-        if (html5QrcodeScanner) {
-            html5QrcodeScanner.stop().then(() => {
-                document.getElementById('scanner-container').style.display = 'none';
-            }).catch(() => {
-                document.getElementById('scanner-container').style.display = 'none';
-            });
-        } else {
-            document.getElementById('scanner-container').style.display = 'none';
-        }
-    }
-
-    document.getElementById('btnManuellAbschicken').addEventListener('click', function() {
-        const input = document.getElementById('inputBarcodeManuell');
-        if (input.value.trim() !== "") {
-            verarbeiteCode(input.value);
-            input.value = "";
-        }
-    });
-
+    // Event-Listener
     document.getElementById('btnScanStarten').addEventListener('click', starteKamera);
     document.getElementById('btnScanStoppen').addEventListener('click', stoppeKamera);
+    document.getElementById('btnManuellAbschicken').addEventListener('click', () => {
+        const val = document.getElementById('inputBarcodeManuell').value;
+        if(val) verarbeiteCode(val);
+    });
 
+    // Start
     tabelleInitialisieren();
 </script>
 
