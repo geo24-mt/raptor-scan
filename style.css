@@ -13,6 +13,7 @@ body {
     display: flex;
     justify-content: center;
     padding: 20px;
+	overflow-x: hidden;
 	background: url('monstera.png') center/cover fixed no-repeat;
 }
 
@@ -22,6 +23,8 @@ body {
     border-radius: 24px; /* Deutlich rundere Ecken wirken weniger starr */
     box-shadow: 0 20px 40px rgba(0,0,0,0.08); /* Stärkerer Schatten für Tiefe */
     text-align: center;
+	position: relative;
+    z-index: 1;
     max-width: 450px;
 }
 
@@ -90,7 +93,11 @@ select, .input-text {
     font-family: 'Outfit', sans-serif;
     background: white;
 }
-
+.manuell-box {
+    position: relative;
+    z-index: 2; /* Höher als die Tabelle */
+    margin: 20px 0;
+}
 /* Button-Anpassung für den Baukasten */
 button {
     width: 100%;
@@ -104,7 +111,11 @@ button {
     cursor: pointer;
     font-family: 'Outfit', sans-serif;
 }
-
+.btn, button, .btn-loeschen {
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 3;
+}
 #btnSpeichern {
     background-color: var(--primary); /* Ein schickes Emerald-Grün */
     font-size: 18px;
@@ -217,6 +228,8 @@ td strong {
 }
 .table-container {
     width: 100%;
+	position: relative;
+    z-index: 0;
     margin: 10px 0;
     overflow-x: auto; /* Nur wenn nötig, erscheint ein Scrollbalken */
     -webkit-overflow-scrolling: touch; 
