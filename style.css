@@ -164,14 +164,14 @@ table {
 th {
     background-color: var(--primary);
     color: white;
-    padding: 12px;
+    padding: 10px;
     font-size: 13px;
     text-transform: uppercase;
     font-weight: 600;
 }
 
 td {
-    padding: 12px;
+    padding: 10px;
     border-bottom: 1px solid #e2e8f0;
     font-size: 15px;
     color: #1e293b; /* Normales Schwarz/Dunkelgrau */
@@ -207,17 +207,27 @@ td strong {
     opacity: 0;
     display: none; /* Das lässt den weißen Kasten verschwinden */
 }
+
+
+.btn-loeschen:hover {
+    background: #dc2626; /* Dunkler beim Drüberfahren */
+}
+@media (max-width: 400px) {
+    th, td { font-size: 12px; padding: 5px; }
+}
+.table-container {
+    width: 100%;
+    margin: 10px 0;
+    overflow-x: auto; /* Nur wenn nötig, erscheint ein Scrollbalken */
+    -webkit-overflow-scrolling: touch; 
+}
 .btn-loeschen {
     background: #ef4444; /* Ein auffälliges Rot */
     color: white;
     border: none;
-    padding: 2px 4px;
+    padding: 2px;
     border-radius: 4px;
     cursor: pointer;
     font-weight: bold;
     font-size: 10px;
-}
-
-.btn-loeschen:hover {
-    background: #dc2626; /* Dunkler beim Drüberfahren */
 }
