@@ -50,28 +50,39 @@
         tabelleInitialisieren();
     };
 
+    // Mapping-Logik: Versucht API-Antworten in Felder wie 'Titel' oder 'Verlag' zu sortieren
     async function holeProduktInfos(barcode) {
+        let result = {};
+        
+        // Open Food Facts (Lebensmittel)
         try {
             const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
             const data = await res.json();
-            if (data.status === 1) return data.product.product_name;
+            if (data.status === 1) {
+                result["Titel"] = data.product.product_name;
+                result["Verlag"] = data.product.brands;
+            }
         } catch(e) {}
-        try {
-            const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${barcode}&format=json&jscmd=data`);
-            const data = await res.json();
-            if (data[`ISBN:${barcode}`]) return data[`ISBN:${barcode}`].title;
-        } catch(e) {}
-        try {
-            const res = await fetch(`https://api.barcodespider.com/v1/lookup?upc=${barcode}`);
-            const data = await res.json();
-            if (data.item_attributes) return data.item_attributes.title;
-        } catch(e) {}
-        return "Unbekanntes Produkt";
+
+        // Open Library (Bücher)
+        if (!result["Titel"]) {
+            try {
+                const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${barcode}&format=json&jscmd=data`);
+                const data = await res.json();
+                if (data[`ISBN:${barcode}`]) {
+                    const b = data[`ISBN:${barcode}`];
+                    result["Titel"] = b.title;
+                    result["Verlag"] = b.publishers ? b.publishers[0].name : "";
+                    result["Erscheinungsjahr"] = b.publish_date;
+                }
+            } catch(e) {}
+        }
+        return result; // Gibt ein Objekt zurück: { "Titel": "...", "Verlag": "..." }
     }
 
     async function speichereProdukt(barcode) {
-        const info = await holeProduktInfos(barcode);
-        dbQuery("INSERT INTO Produkte (liste_id, barcode, data) VALUES (?, ?, ?);", [listenId, barcode, info]);
+        const infoObj = await holeProduktInfos(barcode);
+        dbQuery("INSERT INTO Produkte (liste_id, barcode, data) VALUES (?, ?, ?);", [listenId, barcode, JSON.stringify(infoObj)]);
         tabelleInitialisieren();
     }
 
@@ -82,28 +93,37 @@
         document.getElementById('ansichtListenName').innerText = res[0].values[0][1];
         const attrs = res[0].values[0][2] ? res[0].values[0][2].split(',') : [];
 
+        // Kopfzeile bauen
         const thead = document.getElementById('tabellenKopf');
         let headHtml = "<tr><th>Barcode</th>";
         attrs.forEach(a => headHtml += `<th>${a}</th>`);
         headHtml += "<th>Löschen</th></tr>";
         thead.innerHTML = headHtml;
 
+        // Produkte laden
         const prodRes = dbQuery("SELECT id, barcode, data FROM Produkte WHERE liste_id = ?", [listenId]);
-        renderProdukte(prodRes.length > 0 ? prodRes[0].values : []);
+        renderProdukte(prodRes.length > 0 ? prodRes[0].values, attrs);
     }
 
-    function renderProdukte(produkte) {
+    function renderProdukte(produkte, attrs) {
         const tbody = document.getElementById('tabellenInhalt');
         tbody.innerHTML = "";
         produkte.forEach(p => {
             const row = tbody.insertRow();
-            row.insertCell(0).innerText = p[1]; 
-            const infoDaten = p[2] ? p[2].split('|') : []; 
-            infoDaten.forEach((data, index) => {
-                row.insertCell(index + 1).innerText = data;
+            row.insertCell(0).innerText = p[1]; // Barcode
+            
+            const dataObj = p[2] ? JSON.parse(p[2]) : {};
+            
+            // Für jedes Attribut (Spalte) aus dem Baukasten eine Zelle erstellen
+            attrs.forEach(a => {
+                const cell = row.insertCell(-1);
+                cell.innerText = dataObj[a] || ""; 
+                cell.contentEditable = true; // Manuelle Ergänzung möglich
             });
-            const deleteCell = row.insertCell(-1); 
-            deleteCell.innerHTML = `<button class="btn-loeschen" onclick="loescheDatensatz(${p[0]})">✕</button>`;
+
+            // Löschen
+            const del = row.insertCell(-1);
+            del.innerHTML = `<button class="btn-loeschen" onclick="loescheDatensatz(${p[0]})">✕</button>`;
         });
     }
 
