@@ -34,32 +34,42 @@
     </div>
     
     <table id="meineDynamischeTabelle">
-        <thead><tr id="tabellenKopfZeile"></tr></thead>
+        <thead>
+            <tr id="tabellenKopfZeile">
+                <th>Barcode</th>
+                <th>Daten</th>
+                <th>Löschen</th>
+            </tr>
+        </thead>
         <tbody id="tabellenInhalt"></tbody>
     </table>
 </div>
 
 <script>
     let listenId = null;
+    let html5QrcodeScanner = null;
 
     window.onload = async function() {
         await initDB();
         const urlParams = new URLSearchParams(window.location.search);
         listenId = urlParams.get('listeIndex');
+        console.log("Aktuelle Listen-ID aus URL:", listenId);
         tabelleInitialisieren();
     };
 
     function tabelleInitialisieren() {
-        // Liste aus DB laden
-        const res = dbQuery("SELECT * FROM Listen WHERE id = ?", [listenId]);
-        if (res.length === 0) {
-            document.getElementById('ansichtListenName').innerText = "Liste nicht gefunden!";
+        // SQL-Abfrage mit der ID aus der URL
+        const res = dbQuery("SELECT id, name FROM Listen WHERE id = ?", [listenId]);
+        
+        if (!res || res.length === 0) {
+            document.getElementById('ansichtListenName').innerText = "Liste nicht gefunden (ID: " + listenId + ")";
             return;
         }
+        
         document.getElementById('ansichtListenName').innerText = res[0].values[0][1];
         
-        // Produkte aus DB laden
-        const prodRes = dbQuery("SELECT * FROM Produkte WHERE liste_id = ?", [listenId]);
+        // Produkte für diese ID laden
+        const prodRes = dbQuery("SELECT id, barcode, data FROM Produkte WHERE liste_id = ?", [listenId]);
         renderProdukte(prodRes.length > 0 ? prodRes[0].values : []);
     }
 
@@ -68,17 +78,46 @@
         tbody.innerHTML = "";
         produkte.forEach(p => {
             const row = tbody.insertRow();
-            row.insertCell(0).innerText = p[2]; // Barcode
-            row.insertCell(1).innerText = p[3]; // Daten
+            row.insertCell(0).innerText = p[1]; // Barcode
+            row.insertCell(1).innerText = p[2]; // Daten
             row.insertCell(2).innerHTML = `<button class="btn-loeschen" onclick="loescheDatensatz(${p[0]})">✕</button>`;
         });
     }
 
-    // Kamera-Events
+    function speichereProdukt(barcode, data) {
+        dbQuery("INSERT INTO Produkte (liste_id, barcode, data) VALUES (?, ?, ?);", [listenId, barcode, data]);
+        tabelleInitialisieren();
+    }
+
+    function loescheDatensatz(pId) {
+        dbQuery("DELETE FROM Produkte WHERE id = ?;", [pId]);
+        tabelleInitialisieren();
+    }
+
     document.getElementById('btnScanStarten').addEventListener('click', () => {
         document.getElementById('scanner-container').style.display = 'block';
+        html5QrcodeScanner = new Html5Qrcode("reader");
+        html5QrcodeScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (text) => {
+            speichereProdukt(text, "Gescannter Artikel");
+            stoppeKamera();
+        });
     });
-    // ... hier kommen die restlichen Funktionen wie gewohnt hin ...
+
+    document.getElementById('btnScanStoppen').addEventListener('click', stoppeKamera);
+
+    function stoppeKamera() {
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none');
+        }
+    }
+
+    document.getElementById('btnManuellAbschicken').addEventListener('click', () => {
+        const val = document.getElementById('inputBarcodeManuell').value;
+        if(val) {
+            speichereProdukt(val, "Manuelle Eingabe");
+            document.getElementById('inputBarcodeManuell').value = "";
+        }
+    });
 </script>
 </body>
 </html>
