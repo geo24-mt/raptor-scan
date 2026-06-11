@@ -50,29 +50,20 @@
         tabelleInitialisieren();
     };
 
+    // Mapping: API-Felder auf DEINE Spaltennamen
     async function holeProduktInfos(barcode) {
         let result = {};
         try {
-            const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+            const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${barcode}&format=json&jscmd=data`);
             const data = await res.json();
-            if (data.status === 1) { 
-                result["Titel"] = data.product.product_name; 
-                result["Verlag"] = data.product.brands; 
+            if (data[`ISBN:${barcode}`]) {
+                const b = data[`ISBN:${barcode}`];
+                result["Titel"] = b.title || "";
+                result["Verlag"] = b.publishers ? b.publishers[0].name : "";
+                result["Seitenzahl"] = b.number_of_pages ? b.number_of_pages.toString() : "";
+                result["Erscheinungsjahr"] = b.publish_date || "";
             }
-        } catch(e) {}
-        
-        if (!result["Titel"]) {
-            try {
-                const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${barcode}&format=json&jscmd=data`);
-                const data = await res.json();
-                if (data[`ISBN:${barcode}`]) {
-                    const b = data[`ISBN:${barcode}`];
-                    result["Titel"] = b.title;
-                    result["Verlag"] = b.publishers ? b.publishers[0].name : "";
-                    result["Erscheinungsjahr"] = b.publish_date;
-                }
-            } catch(e) {}
-        }
+        } catch(e) { console.error("API Fehler:", e); }
         return result;
     }
 
@@ -85,9 +76,11 @@
     function tabelleInitialisieren() {
         const res = dbQuery("SELECT id, name, attrs FROM Listen WHERE id = ?", [listenId]);
         if (!res || res.length === 0) return;
+
         document.getElementById('ansichtListenName').innerText = res[0].values[0][1];
+        // Wir holen die Spaltennamen aus der DB (attrs)
         const attrs = res[0].values[0][2] ? res[0].values[0][2].split(',') : [];
-        
+
         const thead = document.getElementById('tabellenKopf');
         let headHtml = "<tr><th>Barcode</th>";
         attrs.forEach(a => headHtml += `<th>${a}</th>`);
@@ -103,18 +96,22 @@
         tbody.innerHTML = "";
         produkte.forEach(p => {
             const row = tbody.insertRow();
-            row.insertCell(0).innerText = p[1];
+            row.insertCell(0).innerText = p[1]; // Barcode
+            
             const dataObj = p[2] ? JSON.parse(p[2]) : {};
             
+            // Füllt die Zellen exakt basierend auf dem Spaltennamen
             attrs.forEach(a => {
                 const cell = row.insertCell(-1);
-                cell.innerText = dataObj[a] || "";
+                // WICHTIG: Erlaubt manuelle Eingabe, falls API nichts findet
+                cell.innerText = dataObj[a] || ""; 
                 cell.contentEditable = true;
                 cell.onblur = () => {
                     dataObj[a] = cell.innerText;
                     dbQuery("UPDATE Produkte SET data = ? WHERE id = ?", [JSON.stringify(dataObj), p[0]]);
                 };
             });
+
             const del = row.insertCell(-1);
             del.innerHTML = `<button class="btn-loeschen" onclick="loescheDatensatz(${p[0]})">✕</button>`;
         });
@@ -141,9 +138,7 @@
     });
 
     document.getElementById('btnScanStoppen').addEventListener('click', () => {
-        if (html5QrcodeScanner) {
-            html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none');
-        }
+        if (html5QrcodeScanner) html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none');
     });
 </script>
 </body>
