@@ -33,16 +33,10 @@
         <button class="btn btn-speichern" id="btnManuellAbschicken">Hinzufügen</button>
     </div>
     
-    <table id="meineDynamischeTabelle">
-        <thead>
-            <tr id="tabellenKopfZeile">
-                <th>Barcode</th>
-                <th>Daten</th>
-                <th>Löschen</th>
-            </tr>
-        </thead>
-        <tbody id="tabellenInhalt"></tbody>
-    </table>
+   <table id="meineDynamischeTabelle">
+    <thead id="tabellenKopf"></thead>
+    <tbody id="tabellenInhalt"></tbody>
+</table>
 </div>
 
 <script>
@@ -53,70 +47,95 @@
         await initDB();
         const urlParams = new URLSearchParams(window.location.search);
         listenId = urlParams.get('listeIndex');
-        console.log("Aktuelle Listen-ID aus URL:", listenId);
         tabelleInitialisieren();
     };
 
-    function tabelleInitialisieren() {
-        // SQL-Abfrage mit der ID aus der URL
-        const res = dbQuery("SELECT id, name FROM Listen WHERE id = ?", [listenId]);
-        
-        if (!res || res.length === 0) {
-            document.getElementById('ansichtListenName').innerText = "Liste nicht gefunden (ID: " + listenId + ")";
-            return;
-        }
-        
-        document.getElementById('ansichtListenName').innerText = res[0].values[0][1];
-        
-        // Produkte für diese ID laden
-        const prodRes = dbQuery("SELECT id, barcode, data FROM Produkte WHERE liste_id = ?", [listenId]);
-        renderProdukte(prodRes.length > 0 ? prodRes[0].values : []);
+    // Die "Allround"-API-Logik für alles (Essen, Bücher, Werkzeug)
+    async function holeProduktInfos(barcode) {
+        // 1. Open Food Facts
+        try {
+            const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+            const data = await res.json();
+            if (data.status === 1) return data.product.product_name;
+        } catch(e) {}
+
+        // 2. Open Library (Bücher/Medien)
+        try {
+            const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${barcode}&format=json&jscmd=data`);
+            const data = await res.json();
+            if (data[`ISBN:${barcode}`]) return data[`ISBN:${barcode}`].title;
+        } catch(e) {}
+
+        // 3. Fallback: Werkzeug/Drogerie (Barcode-Lookup Service)
+        try {
+            const res = await fetch(`https://api.barcodespider.com/v1/lookup?upc=${barcode}`);
+            const data = await res.json();
+            if (data.item_attributes) return data.item_attributes.title;
+        } catch(e) {}
+
+        return "Produkt (" + barcode + ")";
     }
 
-    function renderProdukte(produkte) {
+    // Speichern mit API-Abfrage
+    async function speichereProdukt(barcode) {
+        const info = await holeProduktInfos(barcode);
+        dbQuery("INSERT INTO Produkte (liste_id, barcode, data) VALUES (?, ?, ?);", [listenId, barcode, info]);
+        tabelleInitialisieren();
+    }
+
+    function tabelleInitialisieren() {
+        // 1. Liste und Eigenschaften laden
+        const res = dbQuery("SELECT id, name, attrs FROM Listen WHERE id = ?", [listenId]);
+        if (!res || res.length === 0) return;
+
+        document.getElementById('ansichtListenName').innerText = res[0].values[0][1];
+        const attrs = res[0].values[0][2] ? res[0].values[0][2].split(',') : [];
+
+        // 2. Kopfzeile dynamisch aufbauen
+        const thead = document.getElementById('tabellenKopf');
+        let headHtml = "<tr><th>Barcode</th>";
+        attrs.forEach(a => headHtml += `<th>${a}</th>`);
+        headHtml += "<th>Löschen</th></tr>";
+        thead.innerHTML = headHtml;
+
+        // 3. Produkte laden
+        const prodRes = dbQuery("SELECT id, barcode, data FROM Produkte WHERE liste_id = ?", [listenId]);
         const tbody = document.getElementById('tabellenInhalt');
         tbody.innerHTML = "";
-        produkte.forEach(p => {
-            const row = tbody.insertRow();
-            row.insertCell(0).innerText = p[1]; // Barcode
-            row.insertCell(1).innerText = p[2]; // Daten
-            row.insertCell(2).innerHTML = `<button class="btn-loeschen" onclick="loescheDatensatz(${p[0]})">✕</button>`;
-        });
+        
+        if (prodRes.length > 0) {
+            prodRes[0].values.forEach(p => {
+                const row = tbody.insertRow();
+                row.insertCell(0).innerText = p[1];
+                row.insertCell(1).innerText = p[2];
+                row.insertCell(2).innerHTML = `<button class="btn-loeschen" onclick="loescheDatensatz(${p[0]})">✕</button>`;
+            });
+        }
     }
 
-    function speichereProdukt(barcode, data) {
-        dbQuery("INSERT INTO Produkte (liste_id, barcode, data) VALUES (?, ?, ?);", [listenId, barcode, data]);
+    function loescheDatensatz(id) {
+        dbQuery("DELETE FROM Produkte WHERE id = ?", [id]);
         tabelleInitialisieren();
     }
 
-    function loescheDatensatz(pId) {
-        dbQuery("DELETE FROM Produkte WHERE id = ?;", [pId]);
-        tabelleInitialisieren();
-    }
+    // Buttons verbinden
+    document.getElementById('btnManuellAbschicken').addEventListener('click', () => {
+        const val = document.getElementById('inputBarcodeManuell').value;
+        if(val) speichereProdukt(val);
+    });
 
     document.getElementById('btnScanStarten').addEventListener('click', () => {
         document.getElementById('scanner-container').style.display = 'block';
         html5QrcodeScanner = new Html5Qrcode("reader");
         html5QrcodeScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (text) => {
-            speichereProdukt(text, "Gescannter Artikel");
-            stoppeKamera();
+            speichereProdukt(text);
+            html5QrcodeScanner.stop();
+            document.getElementById('scanner-container').style.display = 'none';
         });
     });
 
-    document.getElementById('btnScanStoppen').addEventListener('click', stoppeKamera);
-
-    function stoppeKamera() {
-        if (html5QrcodeScanner) {
-            html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none');
-        }
-    }
-
-    document.getElementById('btnManuellAbschicken').addEventListener('click', () => {
-        const val = document.getElementById('inputBarcodeManuell').value;
-        if(val) {
-            speichereProdukt(val, "Manuelle Eingabe");
-            document.getElementById('inputBarcodeManuell').value = "";
-        }
+    document.getElementById('btnScanStoppen').addEventListener('click', () => {
+        if (html5QrcodeScanner) html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none');
     });
 </script>
 </body>
