@@ -5,75 +5,72 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+    <script src="db.js"></script>
     <title>Mein Listen-Dashboard</title>
 </head>
 <body>
 
 <div class="container">
     <h2>Meine Sammlungen 🗂️</h2>
-    
-    <a href="index.html" id="linkNeueListe" class="btn btn-neu">＋ Neue Liste erstellen</a>
+    <a href="index.html" class="btn btn-neu">＋ Neue Liste erstellen</a>
     
     <h3>Deine vorhandenen Listen:</h3>
     <div id="listenUebersicht"></div>
 </div>
 
 <script>
-    function ladeListenAusSpeicher() {
-        const gespeicherteDaten = localStorage.getItem('meineAppListen');
-        return gespeicherteDaten ? JSON.parse(gespeicherteDaten) : [];
-    }
+    window.onload = async function() {
+        await initDB();
+		// Test: Was sieht die Datenbank wirklich?
+const debugResult = dbQuery("SELECT * FROM Listen;");
+console.log("DEBUG: Alle Listen in der DB:", debugResult);
+        ladeListenAnzeige();
+    };
 
-    function speichereListenInLocalStorage(listenArray) {
-        localStorage.setItem('meineAppListen', JSON.stringify(listenArray));
-    }
+    function ladeListenAnzeige() {
+        const uebersichtDiv = document.getElementById('listenUebersicht');
+        uebersichtDiv.innerHTML = "";
 
-    let alleListen = ladeListenAusSpeicher();
-
-    const urlParameter = new URLSearchParams(window.location.search);
-    const neuerName = urlParameter.get('addName');
-    const neueAttrs = urlParameter.get('addAttrs');
-
-    if (neuerName && neueAttrs) {
-        const gibtsSchon = alleListen.some(l => l.name === neuerName);
-        if (!gibtsSchon) {
-            alleListen.push({ name: neuerName, attrs: neueAttrs });
-            speichereListenInLocalStorage(alleListen);
+        // SQL: Hole alle Listen aus der Datenbank
+        const result = dbQuery("SELECT id, name FROM Listen;");
+        
+        if (result.length === 0) {
+            uebersichtDiv.innerHTML = "<p style='text-align:center;'>Keine Listen vorhanden.</p>";
+            return;
         }
-        window.history.replaceState({}, document.title, "dashboard.html");
+
+        const listen = result[0].values;
+        
+        listen.forEach(liste => {
+            const id = liste[0];
+            const name = liste[1];
+
+            const link = document.createElement('a');
+            link.className = 'btn-liste';
+            link.href = `tabelle.html?listeIndex=${id}`; // Wir nutzen die Datenbank-ID
+
+            const spanText = document.createElement('span');
+            spanText.innerText = name;
+
+            const spanDelete = document.createElement('span');
+            spanDelete.className = 'btn-delete';
+            spanDelete.innerText = '✕';
+            
+            spanDelete.onclick = function(e) {
+                e.preventDefault();
+                if(confirm("Wirklich löschen?")) {
+                    dbQuery("DELETE FROM Listen WHERE id = ?;", [id]);
+                    dbQuery("DELETE FROM Produkte WHERE liste_id = ?;", [id]);
+                    ladeListenAnzeige(); // Neu laden
+                }
+            };
+
+            link.appendChild(spanText);
+            link.appendChild(spanDelete);
+            uebersichtDiv.appendChild(link);
+        });
     }
-
-    const uebersichtDiv = document.getElementById('listenUebersicht');
-    uebersichtDiv.innerHTML = "";
-
-    if (alleListen.length === 0) {
-        uebersichtDiv.innerHTML = "<p style='color:#7f8c8d; font-style:italic; text-align:center;'>Keine Listen vorhanden.</p>";
-    }
-
-    alleListen.forEach(function(liste, index) {
-        const link = document.createElement('a');
-        link.className = 'btn-liste';
-        link.href = `tabelle.html?listeIndex=${index}&name=${encodeURIComponent(liste.name)}&attrs=${encodeURIComponent(liste.attrs)}`;
-
-        const spanText = document.createElement('span');
-        spanText.innerText = liste.name;
-
-        const spanDelete = document.createElement('span');
-        spanDelete.className = 'btn-delete';
-        spanDelete.innerText = '✕';
-        spanDelete.onclick = function(e) {
-            e.preventDefault();
-            if(confirm(`Liste "${liste.name}" wirklich löschen?`)) {
-                alleListen.splice(index, 1);
-                speichereListenInLocalStorage(alleListen);
-                window.location.reload();
-            }
-        };
-
-        link.appendChild(spanText);
-        link.appendChild(spanDelete);
-        uebersichtDiv.appendChild(link);
-    });
 </script>
 
 </body>

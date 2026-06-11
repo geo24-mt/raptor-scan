@@ -3,143 +3,112 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<link rel="manifest" href="manifest.json">
-	<link rel="stylesheet" href="style.css">
-
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+    <script src="db.js"></script>
     <title>Mein Listen-Baukasten</title>
-   
 </head>
 <body>
 
 <div class="container">
     <h2>Neue Liste erstellen</h2>
     <a href="dashboard.html" class="btn">🗂️ Zu meinen Sammlungen (Dashboard)</a>
-    <!-- 1. Schritt: Name der Liste -->
+    
     <div class="form-group">
         <label for="listenName">Wie soll die Liste heißen?</label>
         <input type="text" id="listenName" placeholder="z. B. Meine Krimis, Videospiele, Gewürze...">
     </div>
     
-    <!-- 2. Schritt: Eigenschaften per Dropdown hinzufügen -->
     <div class="form-group">
         <label for="attributAuswahl">Welche Eigenschaften soll die Liste haben?</label>
         <select id="attributAuswahl">
             <option value="" disabled selected>-- Bitte wählen --</option>
-            <!-- Buch-Kategorie -->
             <optgroup label="Bücher">
                 <option value="Titel">Titel</option>
                 <option value="Autor">Autor</option>
                 <option value="Seitenanzahl">Seitenanzahl</option>
                 <option value="Verlag">Verlag</option>
-				<option value="Erscheinungsjahr">Erscheinungsjahr</option>
+                <option value="Erscheinungsjahr">Erscheinungsjahr</option>
             </optgroup>
-            <!-- Musik / Film -->
             <optgroup label="Musik & Film">
                 <option value="Interpret">Interpret / Band</option>
                 <option value="Album">Album / Song</option>
                 <option value="Regisseur">Regisseur</option>
                 <option value="Schauspieler">Schauspieler</option>
-				<option value="Laufzeit">Laufzeit</option>
+                <option value="Laufzeit">Laufzeit</option>
             </optgroup>
-            <!-- Allgemeines -->
             <optgroup label="Produkte & Haushalt">
                 <option value="Marke">Marke / Hersteller</option>
                 <option value="Gewicht">Gewicht / Menge</option>
                 <option value="Preis">Preis</option>
             </optgroup>
         </select>
-        
         <button type="button" id="btnHinzufuegen">＋ Eigenschaft hinzufügen</button>
     </div>
     
-    <!-- Hier werden die ausgewählten Eigenschaften gleich dynamisch angezeigt -->
     <div class="form-group">
         <label>Gewählte Struktur für deine Tabelle:</label>
-        <div id="gewaehlteAttribute">
-            <!-- Hier zaubert JavaScript gleich die "Chips" rein -->
-        </div>
+        <div id="gewaehlteAttribute"></div>
     </div>
     
-    <!-- 3. Schritt: Finale Erstellung -->
-    <button type="button" id="btnSpeichern" >Liste jetzt anlegen</button>
+    <button type="button" id="btnSpeichern">Liste jetzt anlegen</button>
 </div>
 
-
 <script>
-    // Wir holen uns die Elemente aus dem HTML
+    // Initialisierung der Datenbank beim Laden der Seite
+    window.onload = async function() {
+        await initDB();
+    };
+
     const dropdown = document.getElementById('attributAuswahl');
     const btnAdd = document.getElementById('btnHinzufuegen');
     const anzeigeBereich = document.getElementById('gewaehlteAttribute');
-    
-    // In diesem Array merken wir uns, was der Nutzer angeklickt hat
     let merkListeFuerAttribute = [];
 
-
-    // Event: Wenn man auf "Eigenschaft hinzufügen" klickt
     btnAdd.addEventListener('click', function() {
         const ausgewaehlterWert = dropdown.value;
-        
-        // Prüfen, ob überhaupt was ausgewählt wurde und ob es nicht schon auf der Liste ist
         if (ausgewaehlterWert && !merkListeFuerAttribute.includes(ausgewaehlterWert)) {
-            
-            // Wert ins Array speichern
             merkListeFuerAttribute.push(ausgewaehlterWert);
             
-            // Einen kleinen "Chip" im HTML erzeugen
             const chip = document.createElement('span');
             chip.className = 'attribut-chip';
-            chip.style.cursor = 'pointer'; // Zeigt dem Nutzer, dass man draufklicken kann
-            chip.title = 'Klicken zum Entfernen';
-            chip.innerText = ausgewaehlterWert + ' ✕'; // Wir hängen ein kleines x an den Text
+            chip.style.cursor = 'pointer';
+            chip.innerText = ausgewaehlterWert + ' ✕';
             
-            // NEU: Wenn man auf den Chip klickt, löscht er sich wieder!
             chip.addEventListener('click', function() {
-                // 1. Den Wert aus unserem JavaScript-Array löschen
                 const index = merkListeFuerAttribute.indexOf(ausgewaehlterWert);
-                if (index > -1) {
-                    merkListeFuerAttribute.splice(index, 1);
-                }
-                // 2. Den Chip vom Bildschirm löschen
+                if (index > -1) merkListeFuerAttribute.splice(index, 1);
                 chip.remove();
             });
-            
             anzeigeBereich.appendChild(chip);
-            
-            // Dropdown wieder auf den Standardwert zurücksetzen
             dropdown.value = "";
         }
     });
-	
-	// 1. Wir holen uns den Speicher-Button und das Textfeld für den Listennamen
+
     const btnSpeichern = document.getElementById('btnSpeichern');
     const inputListenName = document.getElementById('listenName');
 
-    // 2. Event: Wenn man auf "Liste jetzt anlegen" klickt
-
-    btnSpeichern.addEventListener('click', function() {
+    btnSpeichern.addEventListener('click', async function() {
         const namederListe = inputListenName.value.trim();
         
         if (namederListe === "") {
-            alert("Bitte gib zuerst einen Namen für deine Liste ein!");
+            alert("Bitte gib einen Namen ein!");
             return;
         }
-        
         if (merkListeFuerAttribute.length === 0) {
-            alert("Bitte füge deiner Liste mindestens eine Eigenschaft hinzu!");
+            alert("Bitte wähle mindestens eine Eigenschaft!");
             return; 
         }
         
+        // Direkter Datenbank-Zugriff statt URL-Umleitung
         const attributeAlsText = merkListeFuerAttribute.join(',');
+        dbQuery("INSERT INTO Listen (name, attrs) VALUES (?, ?);", [namederListe, attributeAlsText]);
         
-        // Wir holen uns die alten Listen aus der URL, falls welche da sind
-        const urlParameter = new URLSearchParams(window.location.search);
-        const alteDaten = urlParameter.get('daten') || encodeURIComponent(JSON.stringify([]));
-        
-        // Einfach nur die neue Liste ans Dashboard melden!
-        window.location.href = `dashboard.html?addName=${encodeURIComponent(namederListe)}&addAttrs=${encodeURIComponent(attributeAlsText)}`;
+        alert("Liste erfolgreich in der Datenbank angelegt!");
+        window.location.href = "dashboard.html";
     });
 </script>
-
 
 </body>
 </html>

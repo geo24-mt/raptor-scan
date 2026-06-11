@@ -13,7 +13,6 @@ body {
     display: flex;
     justify-content: center;
     padding: 20px;
-	overflow-x: hidden;
 	background: url('monstera.png') center/cover fixed no-repeat;
 }
 
@@ -23,8 +22,6 @@ body {
     border-radius: 24px; /* Deutlich rundere Ecken wirken weniger starr */
     box-shadow: 0 20px 40px rgba(0,0,0,0.08); /* Stärkerer Schatten für Tiefe */
     text-align: center;
-	position: relative;
-    z-index: 1;
     max-width: 450px;
 }
 
@@ -93,11 +90,7 @@ select, .input-text {
     font-family: 'Outfit', sans-serif;
     background: white;
 }
-.manuell-box {
-    position: relative;
-    z-index: 2; /* Höher als die Tabelle */
-    margin: 20px 0;
-}
+
 /* Button-Anpassung für den Baukasten */
 button {
     width: 100%;
@@ -111,11 +104,7 @@ button {
     cursor: pointer;
     font-family: 'Outfit', sans-serif;
 }
-.btn, button, .btn-loeschen {
-    pointer-events: auto !important;
-    position: relative;
-    z-index: 3;
-}
+
 #btnSpeichern {
     background-color: var(--primary); /* Ein schickes Emerald-Grün */
     font-size: 18px;
@@ -175,14 +164,14 @@ table {
 th {
     background-color: var(--primary);
     color: white;
-    padding: 10px;
+    padding: 12px;
     font-size: 13px;
     text-transform: uppercase;
     font-weight: 600;
 }
 
 td {
-    padding: 10px;
+    padding: 12px;
     border-bottom: 1px solid #e2e8f0;
     font-size: 15px;
     color: #1e293b; /* Normales Schwarz/Dunkelgrau */
@@ -218,30 +207,17 @@ td strong {
     opacity: 0;
     display: none; /* Das lässt den weißen Kasten verschwinden */
 }
-
-
-.btn-loeschen:hover {
-    background: #dc2626; /* Dunkler beim Drüberfahren */
-}
-@media (max-width: 400px) {
-    th, td { font-size: 12px; padding: 5px; }
-}
-.table-container {
-    width: 100%;
-	position: relative;
-    z-index: 0;
-    margin: 10px 0;
-    overflow-x: auto; /* Nur wenn nötig, erscheint ein Scrollbalken */
-    -webkit-overflow-scrolling: touch; 
-	touch-action: pan-y;
-}
 .btn-loeschen {
     background: #ef4444; /* Ein auffälliges Rot */
     color: white;
     border: none;
-    padding: 2px;
+    padding: 2px 4px;
     border-radius: 4px;
     cursor: pointer;
     font-weight: bold;
     font-size: 10px;
+}
+
+.btn-loeschen:hover {
+    background: #dc2626; /* Dunkler beim Drüberfahren */
 }

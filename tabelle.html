@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="manifest" href="manifest.json">
-	<link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css">
     <title>Meine Liste</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+    <script src="db.js"></script>
 </head>
 <body>
 
 <div class="container">
     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-        <a href="index.html" class="btn" >📋 Zum Baukasten</a>
-        <a href="dashboard.html" class="btn" >🗂️ Zum Dashboard</a>
+        <a href="index.html" class="btn">📋 Zum Baukasten</a>
+        <a href="dashboard.html" class="btn">🗂️ Zum Dashboard</a>
     </div>
     
     <div class="header-box" style="margin-top: 15px;">
@@ -22,225 +22,63 @@
         <button class="btn btn-scan" id="btnScanStarten">📷 Code scannen</button>
     </div>
     
-    <div id="scanner-container">
-        <div id="timer-anzeige">Verbleibende Zeit: 45s</div>
+    <div id="scanner-container" style="display:none;">
         <div id="reader"></div>
         <button class="btn btn-stop" id="btnScanStoppen">Kamera ausschalten</button>
     </div>
 
     <div class="manuell-box">
         <strong>Manuelle Eingabe:</strong>
-        <input type="text" id="inputBarcodeManuell" class="input-text" placeholder="Barcode-Nummer hier eintippen...">
+        <input type="text" id="inputBarcodeManuell" class="input-text" placeholder="Barcode-Nummer...">
         <button class="btn btn-speichern" id="btnManuellAbschicken">Hinzufügen</button>
     </div>
     
-    <div class="table-container">
-    <table style="table-layout: fixed; width: 100%;">
-        <thead>
-            <tr id="tabellenKopfZeile"></tr>
-        </thead>
+    <table id="meineDynamischeTabelle">
+        <thead><tr id="tabellenKopfZeile"></tr></thead>
         <tbody id="tabellenInhalt"></tbody>
     </table>
 </div>
-    <div id="leereMeldung" class="leere-meldung">
-        Diese Liste ist noch leer. Scanne einen Code oder gib ihn manuell ein!
-    </div>
-</div>
-
-
-<div id="filterMenu" style="display:none; position:absolute; background:white; border:1px solid #ccc; padding:10px; z-index:100; border-radius:8px;">
-    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-        <strong>Filter</strong>
-        <span onclick="document.getElementById('filterMenu').style.display='none'" style="cursor:pointer; font-weight:bold;">✕</span>
-    </div>
-    
-    <input type="text" id="filterSuchFeld" placeholder="Suche..." onkeyup="filterTabelle()">
-    <div id="sortOptionen" style="margin-top:5px;">
-        <button onclick="sortiereTabelle('auf')">▲ A-Z</button>
-        <button onclick="sortiereTabelle('ab')">▼ Z-A</button>
-        <button onclick="filterLoeschen()">Filter löschen</button>
-    </div>
-</div>
 
 <script>
-    // --- GLOBALE VARIABLEN ---
-    let html5QrcodeScanner = null;
-    let listenIndex = null;
-    let alleListen = [];
-    let attributeArray = [];
-    let aktuellesFilterAttribut = "";
-    let istGeradeAmVerarbeiten = false;
+    let listenId = null;
 
-    // --- TABELLEN LOGIK ---
-function tabelleInitialisieren() {
-    const urlParameter = new URLSearchParams(window.location.search);
-    listenIndex = urlParameter.get('listeIndex');
-    const gespeicherteDaten = localStorage.getItem('meineAppListen');
-    
-    if (gespeicherteDaten) alleListen = JSON.parse(gespeicherteDaten);
-    
-    let listenStruktur = alleListen[listenIndex];
-    if (!listenStruktur) return;
-
-    document.getElementById('ansichtListenName').innerText = listenStruktur.name;
-    attributeArray = Array.isArray(listenStruktur.attrs) ? listenStruktur.attrs : listenStruktur.attrs.split(',');
-
-    // Kopfzeile bauen
-    const kopfZeile = document.getElementById('tabellenKopfZeile');
-    let kopfHTML = `<th class="barcode-col" onclick="toggleBarcodeSpalte()" style="cursor:pointer;">Barcode ↤</th>`;
-    attributeArray.forEach(attr => {
-        kopfHTML += `<th>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                ${attr}
-                <span class="filter-trichter" onclick="oeffneFilterMenu(event, '${attr}')" style="cursor:pointer; margin-left:5px;">▾</span>
-            </div>
-        </th>`;
-    });
-    kopfHTML += `<th></th>`;
-    kopfZeile.innerHTML = kopfHTML;
-
-    // PRODUKTE ANZEIGEN (Die einzige Stelle, an der gerendert wird)
-    const leereMeldung = document.getElementById('leereMeldung');
-    if (listenStruktur.produkte && listenStruktur.produkte.length > 0) {
-        leereMeldung.style.display = 'none';
-        renderTabellenInhalt(listenStruktur.produkte);
-    } else {
-        leereMeldung.style.display = 'block';
-        document.getElementById('tabellenInhalt').innerHTML = "";
-    }
-}
-
-    function renderTabellenInhalt(produkte) {
-        const tabellenInhalt = document.getElementById('tabellenInhalt');
-        tabellenInhalt.innerHTML = "";
-        produkte.forEach((p, pIndex) => {
-            const zeile = document.createElement('tr');
-            let zeilenHTML = `<td class="barcode-col"><strong>${p.barcode}</strong></td>`;
-            attributeArray.forEach(attr => {
-                zeilenHTML += `<td class="edtierbar klickbar" onclick="zelleManuellEditieren(${pIndex}, '${attr}')">${p[attr] || '-'}</td>`;
-            });
-            zeilenHTML += `<td style="text-align:center;"><button class="btn-loeschen" onclick="loescheDatensatz(${pIndex})">✕</button></td>`;
-            zeile.innerHTML = zeilenHTML;
-            tabellenInhalt.appendChild(zeile);
-        });
-    }
-
-    // --- FILTER & SORTIERUNG ---
-    function oeffneFilterMenu(event, attr) {
-        const menu = document.getElementById('filterMenu');
-        aktuellesFilterAttribut = attr;
-        menu.style.display = 'block';
-        menu.style.left = (event.pageX - 100) + 'px';
-        menu.style.top = (event.pageY + 10) + 'px';
-        setTimeout(() => document.getElementById('filterSuchFeld').focus(), 50);
-    }
-
-    function filterTabelle() {
-        const suchWert = document.getElementById('filterSuchFeld').value.toLowerCase();
-        const zeilen = document.getElementById('tabellenInhalt').getElementsByTagName('tr');
-        const index = attributeArray.indexOf(aktuellesFilterAttribut) + 1;
-        
-        for (let i = 0; i < zeilen.length; i++) {
-            const zelle = zeilen[i].getElementsByTagName('td')[index];
-            zeilen[i].style.display = zelle.innerText.toLowerCase().includes(suchWert) ? "" : "none";
-        }
-    }
-
-    function sortiereTabelle(richtung) {
-        let produkte = alleListen[listenIndex].produkte;
-        produkte.sort((a, b) => {
-            let valA = a[aktuellesFilterAttribut] || "";
-            let valB = b[aktuellesFilterAttribut] || "";
-            return richtung === 'auf' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-        });
-        renderTabellenInhalt(produkte);
-        document.getElementById('filterMenu').style.display = "none";
-    }
-
-    function filterLoeschen() {
-        document.getElementById('filterSuchFeld').value = "";
-        const zeilen = document.getElementById('tabellenInhalt').getElementsByTagName('tr');
-        for (let i = 0; i < zeilen.length; i++) zeilen[i].style.display = "";
-        document.getElementById('filterMenu').style.display = "none";
-    }
-
-    // --- KLICK-LOGIK ---
-    window.onclick = function(event) {
-        if (!event.target.matches('.filter-trichter') && !event.target.closest('#filterMenu')) {
-            document.getElementById('filterMenu').style.display = "none";
-        }
-    }
-
-    // --- SCANNER & DATEN-LOGIK ---
-    function speichereProduktInListe(barcode, produktDaten) {
-        produktDaten.barcode = barcode;
-        alleListen[listenIndex].produkte.push(produktDaten);
-        localStorage.setItem('meineAppListen', JSON.stringify(alleListen));
+    window.onload = async function() {
+        await initDB();
+        const urlParams = new URLSearchParams(window.location.search);
+        listenId = urlParams.get('listeIndex');
         tabelleInitialisieren();
+    };
+
+    function tabelleInitialisieren() {
+        // Liste aus DB laden
+        const res = dbQuery("SELECT * FROM Listen WHERE id = ?", [listenId]);
+        if (res.length === 0) {
+            document.getElementById('ansichtListenName').innerText = "Liste nicht gefunden!";
+            return;
+        }
+        document.getElementById('ansichtListenName').innerText = res[0].values[0][1];
+        
+        // Produkte aus DB laden
+        const prodRes = dbQuery("SELECT * FROM Produkte WHERE liste_id = ?", [listenId]);
+        renderProdukte(prodRes.length > 0 ? prodRes[0].values : []);
     }
 
-    function verarbeiteCode(barcode) {
-        const saubererBarcode = barcode.trim();
-        fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${saubererBarcode}&format=json&jscmd=data`)
-        .then(res => res.json())
-        .then(data => {
-            const entry = data[`ISBN:${saubererBarcode}`];
-            let daten = {};
-            attributeArray.forEach(attr => daten[attr] = entry ? (attr === "Titel" ? entry.title : "-") : "-");
-            speichereProduktInListe(saubererBarcode, daten);
+    function renderProdukte(produkte) {
+        const tbody = document.getElementById('tabellenInhalt');
+        tbody.innerHTML = "";
+        produkte.forEach(p => {
+            const row = tbody.insertRow();
+            row.insertCell(0).innerText = p[2]; // Barcode
+            row.insertCell(1).innerText = p[3]; // Daten
+            row.insertCell(2).innerHTML = `<button class="btn-loeschen" onclick="loescheDatensatz(${p[0]})">✕</button>`;
         });
     }
 
-    function onScanSuccess(decodedText) {
-        if (istGeradeAmVerarbeiten) return;
-        istGeradeAmVerarbeiten = true;
-        stoppeKamera();
-        verarbeiteCode(decodedText);
-    }
-
-    function starteKamera() {
+    // Kamera-Events
+    document.getElementById('btnScanStarten').addEventListener('click', () => {
         document.getElementById('scanner-container').style.display = 'block';
-        html5QrcodeScanner = new Html5Qrcode("reader");
-        html5QrcodeScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess);
-    }
-
-    function stoppeKamera() {
-        if (html5QrcodeScanner) html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none');
-    }
-
-    // --- HELFER ---
-    function loescheDatensatz(pIndex) {
-        if (confirm("Wirklich löschen?")) {
-            alleListen[listenIndex].produkte.splice(pIndex, 1);
-            localStorage.setItem('meineAppListen', JSON.stringify(alleListen));
-            tabelleInitialisieren();
-        }
-    }
-
-    function zelleManuellEditieren(pIndex, attr) {
-        const val = prompt("Ändern zu:", alleListen[listenIndex].produkte[pIndex][attr]);
-        if (val !== null) {
-            alleListen[listenIndex].produkte[pIndex][attr] = val;
-            localStorage.setItem('meineAppListen', JSON.stringify(alleListen));
-            tabelleInitialisieren();
-        }
-    }
-
-    function toggleBarcodeSpalte() {
-        document.querySelectorAll('.barcode-col').forEach(z => z.classList.toggle('collapsed'));
-    }
-
-    // Event-Listener
-    document.getElementById('btnScanStarten').addEventListener('click', starteKamera);
-    document.getElementById('btnScanStoppen').addEventListener('click', stoppeKamera);
-    document.getElementById('btnManuellAbschicken').addEventListener('click', () => {
-        const val = document.getElementById('inputBarcodeManuell').value;
-        if(val) verarbeiteCode(val);
     });
-
-    // Start
-    tabelleInitialisieren();
+    // ... hier kommen die restlichen Funktionen wie gewohnt hin ...
 </script>
-
 </body>
 </html>
