@@ -12,7 +12,12 @@
 <body>
 
 <div class="container">
-    <div class="header-box">
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+        <a href="index.html" class="btn">📋 Zum Baukasten</a>
+        <a href="dashboard.html" class="btn">🗂️ Zum Dashboard</a>
+    </div>
+    
+    <div class="header-box" style="margin-top: 15px;">
         <h2 id="ansichtListenName">Lade Liste...</h2>
         <button class="btn btn-scan" id="btnScanStarten">📷 Code scannen</button>
     </div>
@@ -22,6 +27,12 @@
         <button class="btn btn-stop" id="btnScanStoppen">Kamera ausschalten</button>
     </div>
 
+    <div class="manuell-box">
+        <strong>Manuelle Eingabe:</strong>
+        <input type="text" id="inputBarcodeManuell" class="input-text" placeholder="Barcode-Nummer...">
+        <button class="btn btn-speichern" id="btnManuellAbschicken">Hinzufügen</button>
+    </div>
+    
     <table id="meineDynamischeTabelle">
         <thead id="tabellenKopf"></thead>
         <tbody id="tabellenInhalt"></tbody>
@@ -39,7 +50,7 @@
         tabelleInitialisieren();
     };
 
-    // Deine funktionierende Logik aus dem Ausschnitt
+    // Die von dir validierte API-Logik
     async function holeProduktInfos(barcode, attrs) {
         let temporaereDaten = {};
         
@@ -55,7 +66,7 @@
                     else if (attr === "Autor" || attr === "Marke") temporaereDaten[attr] = b.authors ? b.authors.map(a => a.name).join(', ') : "Unbekannt";
                     else if (attr === "Erscheinungsjahr") temporaereDaten[attr] = b.publish_date || "Unbekannt";
                     else if (attr === "Verlag") temporaereDaten[attr] = b.publishers ? b.publishers.map(p => p.name).join(', ') : "Unbekannt";
-                    else if (attr === "Seitenanzahl" || attr === "Laufzeit") temporaereDaten[attr] = b.number_of_pages ? b.number_of_pages + " Seiten" : "-";
+                    else if (attr === "Seitenanzahl" || attr === "Laufzeit" || attr === "Inhalt") temporaereDaten[attr] = b.number_of_pages ? b.number_of_pages + " Seiten" : "-";
                     else temporaereDaten[attr] = "-";
                 });
                 return temporaereDaten;
@@ -67,6 +78,7 @@
             const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json`);
             const foodData = await res.json();
             const p = foodData.product;
+            
             if (p) {
                 attrs.forEach(attr => {
                     if (attr === "Titel" || attr === "Name" || attr === "Produkt") temporaereDaten[attr] = p.product_name || "Ohne Titel";
@@ -77,7 +89,7 @@
             }
         } catch(e) {}
 
-        // 3. Wenn nichts gefunden
+        // 3. Fallback
         attrs.forEach(attr => temporaereDaten[attr] = "Klicke zum Eintragen");
         return temporaereDaten;
     }
@@ -91,8 +103,6 @@
         tabelleInitialisieren();
     }
 
-    // ... tabelleInitialisieren und renderProdukte wie gehabt ...
-    // (Ich habe den Rest hier kurz gehalten, damit der Block lesbar bleibt, er entspricht dem Standard)
     function tabelleInitialisieren() {
         const res = dbQuery("SELECT name, attrs FROM Listen WHERE id = ?", [listenId]);
         document.getElementById('ansichtListenName').innerText = res[0].values[0][0];
@@ -124,6 +134,8 @@
 
     function loescheDatensatz(id) { dbQuery("DELETE FROM Produkte WHERE id = ?", [id]); tabelleInitialisieren(); }
 
+    document.getElementById('btnManuellAbschicken').addEventListener('click', () => { const val = document.getElementById('inputBarcodeManuell').value; if(val) speichereProdukt(val); });
+    
     document.getElementById('btnScanStarten').addEventListener('click', () => {
         document.getElementById('scanner-container').style.display = 'block';
         html5QrcodeScanner = new Html5Qrcode("reader");
@@ -133,6 +145,8 @@
             document.getElementById('scanner-container').style.display = 'none';
         });
     });
+
+    document.getElementById('btnScanStoppen').addEventListener('click', () => { if (html5QrcodeScanner) html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none'); });
 </script>
 </body>
 </html>
