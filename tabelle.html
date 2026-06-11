@@ -43,18 +43,17 @@
     let listenId = null;
     let html5QrcodeScanner = null;
 
-    // Übersetzungstabelle: Attribut-Name (aus DB/Baukasten) -> API-Feldname
     const fieldMapper = {
-        "Titel": "title",
-        "Autor": "authors",
-        "Seitenanzahl": "number_of_pages",
-        "Verlag": "publishers",
-        "Erscheinungsjahr": "publish_date",
-        "Interpret": "by_artist",
-        "Album": "album",
-        "Marke": "brand",
-        "Gewicht": "weight",
-        "Preis": "price"
+        "Titel": ["product_name", "title"],
+        "Autor": ["authors"],
+        "Seitenanzahl": ["number_of_pages"],
+        "Verlag": ["brands", "publishers"],
+        "Erscheinungsjahr": ["publish_date"],
+        "Interpret": ["by_artist"],
+        "Album": ["album"],
+        "Marke": ["brand"],
+        "Gewicht": ["weight"],
+        "Preis": ["price"]
     };
 
     window.onload = async () => {
@@ -66,23 +65,38 @@
 
     async function holeProduktInfos(barcode) {
         let result = {};
+        const ths = Array.from(document.querySelectorAll('#tabellenKopf th')).map(th => th.innerText);
+
+        // 1. Open Food Facts
+        try {
+            const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+            const data = await res.json();
+            if (data.status === 1) {
+                ths.forEach(col => {
+                    fieldMapper[col]?.forEach(key => {
+                        if (data.product[key]) result[col] = data.product[key].toString();
+                    });
+                });
+            }
+        } catch(e) {}
+
+        // 2. Open Library (nur wenn noch Felder fehlen)
         try {
             const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${barcode}&format=json&jscmd=data`);
             const data = await res.json();
             const b = data[`ISBN:${barcode}`];
             if (b) {
-                // Ermittle die Spalten, die der Nutzer im Baukasten ausgewählt hat
-                const ths = document.querySelectorAll('#tabellenKopf th');
-                ths.forEach(th => {
-                    const colName = th.innerText;
-                    const apiField = fieldMapper[colName];
-                    if (apiField && b[apiField]) {
-                        if (Array.isArray(b[apiField])) result[colName] = b[apiField][0].name || b[apiField][0];
-                        else result[colName] = b[apiField].toString();
-                    }
+                ths.forEach(col => {
+                    if (result[col]) return; // Schon gefunden?
+                    fieldMapper[col]?.forEach(key => {
+                        if (b[key]) {
+                            result[col] = Array.isArray(b[key]) ? b[key][0].name || b[key][0] : b[key].toString();
+                        }
+                    });
                 });
             }
-        } catch(e) { console.error("API Fehler:", e); }
+        } catch(e) {}
+        
         return result;
     }
 
@@ -113,7 +127,7 @@
         tbody.innerHTML = "";
         produkte.forEach(p => {
             const row = tbody.insertRow();
-            row.insertCell(0).innerText = p[1]; // Barcode
+            row.insertCell(0).innerText = p[1];
             const dataObj = p[2] ? JSON.parse(p[2]) : {};
             
             attrs.forEach(a => {
@@ -132,7 +146,12 @@
 
     function loescheDatensatz(id) { dbQuery("DELETE FROM Produkte WHERE id = ?", [id]); tabelleInitialisieren(); }
 
-    document.getElementById('btnManuellAbschicken').addEventListener('click', () => { const val = document.getElementById('inputBarcodeManuell').value; if(val) speichereProdukt(val); });
+    document.getElementById('btnManuellAbschicken').addEventListener('click', () => { 
+        const val = document.getElementById('inputBarcodeManuell').value; 
+        if(val) speichereProdukt(val); 
+    });
+    
+    // Kamera-Logik bleibt gleich...
     document.getElementById('btnScanStarten').addEventListener('click', () => {
         document.getElementById('scanner-container').style.display = 'block';
         html5QrcodeScanner = new Html5Qrcode("reader");
@@ -142,7 +161,9 @@
             document.getElementById('scanner-container').style.display = 'none';
         });
     });
-    document.getElementById('btnScanStoppen').addEventListener('click', () => { if (html5QrcodeScanner) html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none'); });
+    document.getElementById('btnScanStoppen').addEventListener('click', () => { 
+        if (html5QrcodeScanner) html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none'); 
+    });
 </script>
 </body>
 </html>
