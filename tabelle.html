@@ -43,28 +43,24 @@
     let listenId = null;
     let html5QrcodeScanner = null;
 
-    window.onload = async function() {
+    window.onload = async () => {
         await initDB();
         const urlParams = new URLSearchParams(window.location.search);
         listenId = urlParams.get('listeIndex');
         tabelleInitialisieren();
     };
 
-    // Mapping-Logik: Versucht API-Antworten in Felder wie 'Titel' oder 'Verlag' zu sortieren
     async function holeProduktInfos(barcode) {
         let result = {};
-        
-        // Open Food Facts (Lebensmittel)
         try {
             const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
             const data = await res.json();
-            if (data.status === 1) {
-                result["Titel"] = data.product.product_name;
-                result["Verlag"] = data.product.brands;
+            if (data.status === 1) { 
+                result["Titel"] = data.product.product_name; 
+                result["Verlag"] = data.product.brands; 
             }
         } catch(e) {}
-
-        // Open Library (Bücher)
+        
         if (!result["Titel"]) {
             try {
                 const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${barcode}&format=json&jscmd=data`);
@@ -77,7 +73,7 @@
                 }
             } catch(e) {}
         }
-        return result; // Gibt ein Objekt zurück: { "Titel": "...", "Verlag": "..." }
+        return result;
     }
 
     async function speichereProdukt(barcode) {
@@ -89,20 +85,17 @@
     function tabelleInitialisieren() {
         const res = dbQuery("SELECT id, name, attrs FROM Listen WHERE id = ?", [listenId]);
         if (!res || res.length === 0) return;
-
         document.getElementById('ansichtListenName').innerText = res[0].values[0][1];
         const attrs = res[0].values[0][2] ? res[0].values[0][2].split(',') : [];
-
-        // Kopfzeile bauen
+        
         const thead = document.getElementById('tabellenKopf');
         let headHtml = "<tr><th>Barcode</th>";
         attrs.forEach(a => headHtml += `<th>${a}</th>`);
         headHtml += "<th>Löschen</th></tr>";
         thead.innerHTML = headHtml;
 
-        // Produkte laden
         const prodRes = dbQuery("SELECT id, barcode, data FROM Produkte WHERE liste_id = ?", [listenId]);
-        renderProdukte(prodRes.length > 0 ? prodRes[0].values, attrs);
+        renderProdukte(prodRes.length > 0 ? prodRes[0].values : [], attrs);
     }
 
     function renderProdukte(produkte, attrs) {
@@ -110,31 +103,31 @@
         tbody.innerHTML = "";
         produkte.forEach(p => {
             const row = tbody.insertRow();
-            row.insertCell(0).innerText = p[1]; // Barcode
-            
+            row.insertCell(0).innerText = p[1];
             const dataObj = p[2] ? JSON.parse(p[2]) : {};
             
-            // Für jedes Attribut (Spalte) aus dem Baukasten eine Zelle erstellen
             attrs.forEach(a => {
                 const cell = row.insertCell(-1);
-                cell.innerText = dataObj[a] || ""; 
-                cell.contentEditable = true; // Manuelle Ergänzung möglich
+                cell.innerText = dataObj[a] || "";
+                cell.contentEditable = true;
+                cell.onblur = () => {
+                    dataObj[a] = cell.innerText;
+                    dbQuery("UPDATE Produkte SET data = ? WHERE id = ?", [JSON.stringify(dataObj), p[0]]);
+                };
             });
-
-            // Löschen
             const del = row.insertCell(-1);
             del.innerHTML = `<button class="btn-loeschen" onclick="loescheDatensatz(${p[0]})">✕</button>`;
         });
     }
 
-    function loescheDatensatz(id) {
-        dbQuery("DELETE FROM Produkte WHERE id = ?", [id]);
-        tabelleInitialisieren();
+    function loescheDatensatz(id) { 
+        dbQuery("DELETE FROM Produkte WHERE id = ?", [id]); 
+        tabelleInitialisieren(); 
     }
 
-    document.getElementById('btnManuellAbschicken').addEventListener('click', () => {
-        const val = document.getElementById('inputBarcodeManuell').value;
-        if(val) speichereProdukt(val);
+    document.getElementById('btnManuellAbschicken').addEventListener('click', () => { 
+        const val = document.getElementById('inputBarcodeManuell').value; 
+        if(val) speichereProdukt(val); 
     });
 
     document.getElementById('btnScanStarten').addEventListener('click', () => {
@@ -148,7 +141,9 @@
     });
 
     document.getElementById('btnScanStoppen').addEventListener('click', () => {
-        if (html5QrcodeScanner) html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none');
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.stop().then(() => document.getElementById('scanner-container').style.display = 'none');
+        }
     });
 </script>
 </body>
